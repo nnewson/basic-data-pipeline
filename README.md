@@ -220,13 +220,38 @@ With Docker running, you can access:
 
 - **RabbitMQ Management** — http://localhost:15672 (guest/guest)
 
+## Testing
+
+Tests use pytest with mocked external services — no Docker required.
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run with verbose output
+uv run pytest -v
+
+# Run a specific test file
+uv run pytest tests/test_api.py
+
+# Run a specific test by name
+uv run pytest -k "test_page_count"
+```
+
 ## Project Structure
 
 ```
 src/pipeline/
-    config.py           # Configuration (env vars with defaults)
-    producer.py         # Generates fake events, publishes to Kafka
-    kafka_consumer.py   # Reads Kafka, writes to Redis/Cassandra/RabbitMQ
-    rabbitmq_worker.py  # Processes RabbitMQ jobs
-    api.py              # FastAPI endpoints for querying pipeline data
+    config.py            # Configuration (env vars with defaults)
+    producer.py          # Generates fake events, publishes to Kafka
+    kafka_consumer.py    # Reads Kafka, writes to Redis/Cassandra/RabbitMQ
+    rabbitmq_worker.py   # Processes RabbitMQ jobs
+    api.py               # FastAPI endpoints for querying pipeline data
+
+tests/
+    test_config.py           # Env var overrides and defaults
+    test_producer.py         # Event creation and validation
+    test_kafka_consumer.py   # Redis/Cassandra updates and message fan-out
+    test_rabbitmq_worker.py  # Job processing and acknowledgement
+    test_api.py              # API endpoint responses
 ```
