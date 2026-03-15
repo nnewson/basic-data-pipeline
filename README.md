@@ -156,13 +156,25 @@ To list topics:
 docker compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list
 ```
 
-To read messages from the `pageviews` topic (from the beginning):
+To see topic details including partition count:
+
+```bash
+docker compose exec kafka kafka-topics --bootstrap-server localhost:9092 --describe --topic pageviews
+```
+
+To read messages from all partitions (from the beginning):
 
 ```bash
 docker compose exec kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic pageviews --from-beginning
 ```
 
-To see consumer group offsets (how far behind the consumer is):
+To read messages from a specific partition (e.g. partition 0, usernames a-g):
+
+```bash
+docker compose exec kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic pageviews --partition 0 --from-beginning
+```
+
+To see consumer group offsets per partition (which consumer owns which partition, and how far behind each is):
 
 ```bash
 docker compose exec kafka kafka-consumer-groups --bootstrap-server localhost:9092 --group pipeline-consumer --describe
@@ -192,8 +204,15 @@ SELECT * FROM pageviews LIMIT 10;
 -- View events for a specific user
 SELECT * FROM pageviews WHERE user_id = 'some_username' LIMIT 10;
 
+-- View events for a user within a time range
+SELECT * FROM pageviews WHERE user_id = 'some_username'
+  AND event_time > '2026-03-15 00:00:00' LIMIT 10;
+
 -- Count total rows (slow on large tables)
 SELECT COUNT(*) FROM pageviews;
+
+-- Count events per user (requires ALLOW FILTERING)
+SELECT user_id, COUNT(*) FROM pageviews GROUP BY user_id;
 ```
 
 ## Inspecting Redis
