@@ -5,6 +5,7 @@ from functools import partial
 import pika
 import redis
 
+from pipeline import wait_for_connection
 from pipeline.config import REDIS_HOST, REDIS_PORT, RABBITMQ_HOST, RABBITMQ_QUEUE
 
 logger = logging.getLogger("worker")
@@ -21,7 +22,10 @@ def process_job(redis_client: redis.Redis, ch, method, properties, body) -> None
 def main() -> None:
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
 
-    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
+    connection = wait_for_connection(
+        "RabbitMQ",
+        lambda: pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST)),
+    )
 
     channel = connection.channel()
     channel.queue_declare(queue=RABBITMQ_QUEUE)

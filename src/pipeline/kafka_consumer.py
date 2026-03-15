@@ -7,6 +7,7 @@ from cassandra.cluster import Cluster
 
 import logging
 
+from pipeline import wait_for_connection
 from pipeline.config import (
     KAFKA_TOPIC,
     KAFKA_SERVER,
@@ -55,21 +56,27 @@ def process_messages(
 
 def main() -> None:
     # Set up Kafka consumer
-    consumer = KafkaConsumer(
-        KAFKA_TOPIC,
-        bootstrap_servers=KAFKA_SERVER,
-        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-        group_id="pipeline-consumer",
-        auto_offset_reset="earliest",
+    consumer = wait_for_connection(
+        "Kafka",
+        lambda: KafkaConsumer(
+            KAFKA_TOPIC,
+            bootstrap_servers=KAFKA_SERVER,
+            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+            group_id="pipeline-consumer",
+            auto_offset_reset="earliest",
+        ),
     )
 
     # Setup Cassandra session
     cluster = Cluster([CASSANDRA_HOST])
-    session = cluster.connect(KEYSPACE)
+    session = wait_for_connection("Cassandra", lambda: cluster.connect(KEYSPACE))
 
     # Setup Redis client
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
-    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
+    connection = wait_for_connection(
+        "RabbitMQ",
+        lambda: pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST)),
+    )
 
     channel = connection.channel()
     channel.queue_declare(queue=RABBITMQ_QUEUE)

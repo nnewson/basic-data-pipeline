@@ -68,7 +68,8 @@ Wait until all services show as `healthy` before proceeding. Cassandra is the sl
 Once Cassandra is healthy, load the schema:
 
 ```bash
-docker compose exec cassandra cqlsh -f /dev/stdin < cassandra_schema.cql
+docker compose cp cassandra_schema.cql cassandra:/tmp/schema.cql
+docker compose exec cassandra cqlsh -f /tmp/schema.cql
 ```
 
 ### 4. Start the pipeline
