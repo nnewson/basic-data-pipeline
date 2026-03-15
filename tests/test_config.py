@@ -41,8 +41,14 @@ def test_config_reads_env_vars(monkeypatch, env_var, env_value, config_attr, exp
 def test_config_defaults(monkeypatch, config_attr, expected):
     # Clear any env vars that might be set
     env_vars = [
-        "KAFKA_TOPIC", "KAFKA_SERVER", "REDIS_HOST", "REDIS_PORT",
-        "RABBITMQ_HOST", "RABBITMQ_QUEUE", "CASSANDRA_HOST", "CASSANDRA_KEYSPACE",
+        "KAFKA_TOPIC",
+        "KAFKA_SERVER",
+        "REDIS_HOST",
+        "REDIS_PORT",
+        "RABBITMQ_HOST",
+        "RABBITMQ_QUEUE",
+        "CASSANDRA_HOST",
+        "CASSANDRA_KEYSPACE",
     ]
     for var in env_vars:
         monkeypatch.delenv(var, raising=False)

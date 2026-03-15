@@ -17,7 +17,9 @@ logger = logging.getLogger("api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    app.state.redis_client = redis.Redis(
+        host=REDIS_HOST, port=REDIS_PORT, decode_responses=True
+    )
     cluster = Cluster([CASSANDRA_HOST])
     app.state.session = cluster.connect(KEYSPACE)
     yield

@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
-from pipeline.api import CassandraSession, RedisClient, app, get_redis, get_session
+from pipeline.api import app, get_redis, get_session
 
 
 @pytest.fixture

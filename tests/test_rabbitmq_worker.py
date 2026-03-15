@@ -31,7 +31,9 @@ def mock_method():
         "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     ],
 )
-def test_process_job_marks_as_processed(mock_redis, mock_channel, mock_method, event_id):
+def test_process_job_marks_as_processed(
+    mock_redis, mock_channel, mock_method, event_id
+):
     body = json.dumps({"event_id": event_id}).encode()
 
     process_job(mock_redis, mock_channel, mock_method, None, body)
