@@ -54,31 +54,32 @@ def process_messages(
 
 
 def main() -> None:
+    # Set up Kafka consumer
+    consumer = KafkaConsumer(
+        KAFKA_TOPIC,
+        bootstrap_servers=KAFKA_SERVER,
+        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+        group_id="pipeline-consumer",
+        auto_offset_reset="earliest",
+    )
+
+    # Setup Cassandra session
+    cluster = Cluster([CASSANDRA_HOST])
+    session = cluster.connect(KEYSPACE)
+
+    # Setup Redis client
+    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
+    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
+
+    channel = connection.channel()
+    channel.queue_declare(queue=RABBITMQ_QUEUE)
+
     try:
-        # Set up Kafka consumer
-        consumer = KafkaConsumer(
-            KAFKA_TOPIC,
-            bootstrap_servers=KAFKA_SERVER,
-            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-            group_id="pipeline-consumer",
-            auto_offset_reset="earliest",
-        )
-
-        # Setup Cassandra session
-        cluster = Cluster([CASSANDRA_HOST])
-        session = cluster.connect(KEYSPACE)
-
-        # Setup Redis client
-        redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
-        connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
-
-        channel = connection.channel()
-        channel.queue_declare(queue=RABBITMQ_QUEUE)
-
         # Process messages from Kafka to Cassandra and Redis, then publish to RabbitMQ
         process_messages(consumer, redis_client, session, channel)
     except KeyboardInterrupt:
         logger.info("Shutting down consumer")
+    finally:
         consumer.close()
         connection.close()
         redis_client.close()

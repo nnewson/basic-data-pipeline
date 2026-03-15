@@ -97,6 +97,117 @@ All settings default to `localhost` for local development. Override via environm
 | `CASSANDRA_HOST`     | `localhost`          | Cassandra host            |
 | `CASSANDRA_KEYSPACE` | `pipeline`           | Cassandra keyspace        |
 
+## Querying the API
+
+The API runs on http://localhost:8000 by default. Example queries using `curl`:
+
+```bash
+# Get the view count for the /pricing page
+curl http://localhost:8000/counts/page/pricing
+
+# Get the last page visited by a user
+curl http://localhost:8000/users/john_doe/last-page
+
+# Get recent pageview events for a user
+curl http://localhost:8000/events/john_doe
+```
+
+Example responses:
+
+```json
+// GET /counts/page/pricing
+{"page": "pricing", "count": 42}
+
+// GET /users/john_doe/last-page
+{"user": "john_doe", "last_page": "/docs"}
+
+// GET /events/john_doe
+[
+  {
+    "user_id": "john_doe",
+    "event_id": "a1b2c3d4-...",
+    "event_time": "2026-03-15T10:30:00",
+    "page": "/pricing"
+  }
+]
+```
+
+FastAPI also generates interactive API docs at http://localhost:8000/docs.
+
+## Inspecting Kafka
+
+To list topics:
+
+```bash
+docker compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list
+```
+
+To read messages from the `pageviews` topic (from the beginning):
+
+```bash
+docker compose exec kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic pageviews --from-beginning
+```
+
+To see consumer group offsets (how far behind the consumer is):
+
+```bash
+docker compose exec kafka kafka-consumer-groups --bootstrap-server localhost:9092 --group pipeline-consumer --describe
+```
+
+## Inspecting Cassandra
+
+To open a CQL shell:
+
+```bash
+docker compose exec cassandra cqlsh
+```
+
+Useful queries once inside the shell:
+
+```sql
+-- Switch to the pipeline keyspace
+USE pipeline;
+
+-- Describe the schema
+DESCRIBE TABLES;
+DESCRIBE TABLE pageviews;
+
+-- View recent events (most recent first)
+SELECT * FROM pageviews LIMIT 10;
+
+-- View events for a specific user
+SELECT * FROM pageviews WHERE user_id = 'some_username' LIMIT 10;
+
+-- Count total rows (slow on large tables)
+SELECT COUNT(*) FROM pageviews;
+```
+
+## Inspecting Redis
+
+To open a Redis CLI session:
+
+```bash
+docker compose exec redis redis-cli
+```
+
+Useful commands once inside the CLI:
+
+```
+# List all keys matching a pattern
+KEYS pageviews:*
+KEYS user:last_page:*
+KEYS job:*
+
+# Get a page view count
+GET pageviews:/pricing
+
+# Get a user's last visited page
+GET user:last_page:some_username
+
+# Check if a job was processed
+GET job:some-event-uuid
+```
+
 ## Management UIs
 
 With Docker running, you can access:

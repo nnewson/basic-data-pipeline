@@ -24,7 +24,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest", # For testing
+  "pytest",  # For testing
+  "httpx",   # For FastAPI test client
   "ruff",   # For formatting and linting
   "honcho", # For dev procfile orchestration
 ]
@@ -34,6 +35,9 @@ venvPath = "."
 venv = ".venv"
 pythonVersion = "3.13"
 include = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [project.scripts]
 producer = "pipeline.producer:main"

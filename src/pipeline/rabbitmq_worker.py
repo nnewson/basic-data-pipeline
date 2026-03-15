@@ -19,23 +19,24 @@ def process_job(redis_client: redis.Redis, ch, method, properties, body) -> None
 
 
 def main() -> None:
+    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
+
+    connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
+
+    channel = connection.channel()
+    channel.queue_declare(queue=RABBITMQ_QUEUE)
+
+    channel.basic_consume(
+        queue=RABBITMQ_QUEUE,
+        on_message_callback=partial(process_job, redis_client),
+    )
+
+    logger.info("Worker started")
     try:
-        redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
-
-        connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
-
-        channel = connection.channel()
-        channel.queue_declare(queue=RABBITMQ_QUEUE)
-
-        channel.basic_consume(
-            queue=RABBITMQ_QUEUE,
-            on_message_callback=partial(process_job, redis_client),
-        )
-
-        logger.info("Worker started")
         channel.start_consuming()
     except KeyboardInterrupt:
         logger.info("Shutting down worker")
+    finally:
         connection.close()
         redis_client.close()
 
