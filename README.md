@@ -73,6 +73,11 @@ docker compose exec cassandra cqlsh -f /dev/stdin < cassandra_schema.cql
 
 ### 4. Start the pipeline
 
+Activate the virtual enviroment for Python:
+```bash
+source .venv/bin/activate
+```
+
 Use [honcho](https://honcho.readthedocs.io/) to run all four processes at once via the `Procfile`:
 
 ```bash
@@ -227,6 +232,9 @@ With Docker running, you can access:
 Tests use pytest with mocked external services — no Docker required.
 
 ```bash
+# Activate the virtual env
+source .venv/bin/activate
+
 # Run all tests
 uv run pytest
 
