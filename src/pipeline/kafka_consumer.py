@@ -7,7 +7,7 @@ from cassandra.cluster import Cluster
 
 import logging
 
-from pipeline import wait_for_connection
+from pipeline import get_partition, wait_for_connection
 from pipeline.config import (
     KAFKA_TOPIC,
     KAFKA_SERVER,
@@ -17,6 +17,7 @@ from pipeline.config import (
     KEYSPACE,
     RABBITMQ_HOST,
     RABBITMQ_QUEUE,
+    RABBITMQ_PARTITIONS,
 )
 
 logger = logging.getLogger("consumer")
@@ -39,6 +40,10 @@ def update_cassandra(session, event: dict) -> None:
     )
 
 
+def get_queue_name(base: str, partition: int) -> str:
+    return f"{base}_{partition}"
+
+
 def process_messages(
     consumer: KafkaConsumer, redis_client: redis.Redis, session, channel
 ) -> None:
@@ -49,8 +54,9 @@ def process_messages(
         update_redis(redis_client, event)
         update_cassandra(session, event)
 
+        queue = get_queue_name(RABBITMQ_QUEUE, get_partition(event["user_id"], RABBITMQ_PARTITIONS))
         channel.basic_publish(
-            exchange="", routing_key=RABBITMQ_QUEUE, body=json.dumps(event)
+            exchange="", routing_key=queue, body=json.dumps(event)
         )
 
 
@@ -79,7 +85,8 @@ def main() -> None:
     )
 
     channel = connection.channel()
-    channel.queue_declare(queue=RABBITMQ_QUEUE)
+    for i in range(RABBITMQ_PARTITIONS):
+        channel.queue_declare(queue=get_queue_name(RABBITMQ_QUEUE, i))
 
     try:
         # Process messages from Kafka to Cassandra and Redis, then publish to RabbitMQ

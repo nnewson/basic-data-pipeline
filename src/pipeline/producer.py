@@ -5,26 +5,12 @@ import uuid
 from faker import Faker
 from kafka import KafkaProducer
 
-from pipeline import wait_for_connection
+from pipeline import get_partition, wait_for_connection
 from pipeline.config import KAFKA_PARTITIONS, KAFKA_SERVER, KAFKA_TOPIC
 
 import logging
 
 logger = logging.getLogger("producer")
-
-
-def get_partition(username: str, num_partitions: int) -> int:
-    """Route a username to a partition based on its first letter.
-
-    Splits the alphabet evenly across partitions:
-      4 partitions: a-g → 0, h-m → 1, n-t → 2, u-z → 3
-    """
-    first_char = username[0].lower()
-    if not first_char.isalpha():
-        return 0
-    index = ord(first_char) - ord("a")  # 0-25
-    bucket_size = 26 / num_partitions
-    return int(index // bucket_size)
 
 
 def create_event(fake: Faker, pages: list[str]) -> dict:
@@ -45,7 +31,7 @@ def process_messages(producer: KafkaProducer, fake: Faker, pages: list[str]) -> 
 
         logger.info(f"Produced (partition {partition}): {event}")
 
-        time.sleep(10)
+        time.sleep(1)
 
 
 def main() -> None:

@@ -13,11 +13,11 @@ A demo project that wires together Kafka, RabbitMQ, Redis, and Cassandra into a 
 ## Architecture
 
 ```
-                         ┌── Consumer 1 (a-g) ──┐
-                         ├── Consumer 2 (h-m) ──┤──> Redis (counters + last page)
-Producer --> Kafka (4p) ─┤                      ├──> Cassandra (event log)
-                         ├── Consumer 3 (n-t) ──┤──> RabbitMQ --> Worker --> Redis (job status)
-                         └── Consumer 4 (u-z) ──┘
+                         ┌── Consumer 1 (a-g) ──┐                        ┌── Worker 1 (a-g) ──┐
+                         ├── Consumer 2 (h-m) ──┤──> Redis (counters)     ├── Worker 2 (h-m) ──┤
+Producer --> Kafka (4p) ─┤                      ├──> Cassandra (events)   ├── Worker 3 (n-t) ──┼──> Redis (job status)
+                         ├── Consumer 3 (n-t) ──┤──> RabbitMQ (4q) ──────>├── Worker 4 (u-z) ──┤
+                         └── Consumer 4 (u-z) ──┘                        └────────────────────┘
 
 API (FastAPI) reads from Redis and Cassandra
 ```
@@ -27,9 +27,9 @@ API (FastAPI) reads from Redis and Cassandra
 **Consumers** (x4) each read from one partition and fan out to three destinations:
 - **Redis** — increments page view counters and tracks each user's last visited page
 - **Cassandra** — stores a persistent log of all pageview events
-- **RabbitMQ** — publishes events to a queue for downstream processing
+- **RabbitMQ** — publishes events to one of 4 partitioned queues using the same username routing (a-g, h-m, n-t, u-z)
 
-**Worker** consumes jobs from RabbitMQ and marks them as processed in Redis.
+**Workers** (x4) each consume from one RabbitMQ queue and mark jobs as processed in Redis.
 
 **API** exposes the pipeline data via HTTP endpoints:
 - `GET /counts/page/{page}` — page view count
@@ -87,21 +87,29 @@ Use [honcho](https://honcho.readthedocs.io/) to run all processes at once via th
 uv run honcho start
 ```
 
-This starts the producer, 4 consumers, worker, and API server simultaneously. Each process is labelled in the log output.
+This starts the producer, 4 consumers, 4 workers, and API server simultaneously. Each process is labelled in the log output.
 
 To run individual components instead:
 
 ```bash
 uv run producer
-uv run consumer   # run in 4 separate terminals for full partition coverage
+
+# 4 consumers — each joins the same consumer group, so Kafka assigns one partition to each
+uv run consumer   # run in 4 separate terminals
 uv run consumer
 uv run consumer
 uv run consumer
-uv run worker
+
+# 4 workers — each reads from a specific RabbitMQ queue
+RABBITMQ_QUEUE=analytics_jobs_0 uv run worker
+RABBITMQ_QUEUE=analytics_jobs_1 uv run worker
+RABBITMQ_QUEUE=analytics_jobs_2 uv run worker
+RABBITMQ_QUEUE=analytics_jobs_3 uv run worker
+
 uv run api
 ```
 
-Each consumer instance joins the same Kafka consumer group (`pipeline-consumer`), so Kafka automatically assigns one partition to each.
+Each consumer instance joins the same Kafka consumer group (`pipeline-consumer`), so Kafka automatically assigns one partition to each. Each worker instance reads from a dedicated RabbitMQ queue, matching the same username partitioning scheme used by Kafka.
 
 ## Configuration
 
@@ -111,10 +119,12 @@ All settings default to `localhost` for local development. Override via environm
 |----------------------|----------------------|---------------------------|
 | `KAFKA_SERVER`       | `localhost:9092`     | Kafka bootstrap server    |
 | `KAFKA_TOPIC`        | `pageviews`          | Kafka topic name          |
+| `KAFKA_PARTITIONS`   | `4`                  | Number of Kafka partitions|
 | `REDIS_HOST`         | `localhost`          | Redis host                |
 | `REDIS_PORT`         | `6379`               | Redis port                |
 | `RABBITMQ_HOST`      | `localhost`          | RabbitMQ host             |
-| `RABBITMQ_QUEUE`     | `analytics_jobs`     | RabbitMQ queue name       |
+| `RABBITMQ_QUEUE`     | `analytics_jobs`     | RabbitMQ queue base name  |
+| `RABBITMQ_PARTITIONS`| `4`                  | Number of RabbitMQ queues |
 | `CASSANDRA_HOST`     | `localhost`          | Cassandra host            |
 | `CASSANDRA_KEYSPACE` | `pipeline`           | Cassandra keyspace        |
 

@@ -3,7 +3,8 @@ from uuid import UUID
 import pytest
 from faker import Faker
 
-from pipeline.producer import create_event, get_partition
+from pipeline import get_partition
+from pipeline.producer import create_event
 
 
 @pytest.fixture
