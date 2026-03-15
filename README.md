@@ -1,5 +1,11 @@
 # Basic Data Pipeline
 
+This started a while ago as a simple sandbox to play around with system level components, and how to use Python to glue them together.
+Then I found myself using those files as my reference for new projects, at which point I realise I need to have a local repo for proper change management.
+And then I thought, I might as well put it in my repo and clean things up (Claude added test and gave me a code review before hand).
+
+---
+
 A demo project that wires together Kafka, RabbitMQ, Redis, and Cassandra into a simple event-processing pipeline. Built as a reference example for learning how these technologies connect.
 
 ## Architecture
