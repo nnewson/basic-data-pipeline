@@ -13,16 +13,18 @@ A demo project that wires together Kafka, RabbitMQ, Redis, and Cassandra into a 
 ## Architecture
 
 ```
-Producer --> Kafka --> Consumer --> Redis (counters + last page)
-                          |------> Cassandra (event log)
-                          |------> RabbitMQ --> Worker --> Redis (job status)
+                         ┌── Consumer 1 (a-g) ──┐
+                         ├── Consumer 2 (h-m) ──┤──> Redis (counters + last page)
+Producer --> Kafka (4p) ─┤                      ├──> Cassandra (event log)
+                         ├── Consumer 3 (n-t) ──┤──> RabbitMQ --> Worker --> Redis (job status)
+                         └── Consumer 4 (u-z) ──┘
 
 API (FastAPI) reads from Redis and Cassandra
 ```
 
-**Producer** generates fake pageview events and publishes them to a Kafka topic.
+**Producer** generates fake pageview events and routes them to one of 4 Kafka partitions based on the first letter of the username (a-g, h-m, n-t, u-z).
 
-**Consumer** reads from Kafka and fans out to three destinations:
+**Consumers** (x4) each read from one partition and fan out to three destinations:
 - **Redis** — increments page view counters and tracks each user's last visited page
 - **Cassandra** — stores a persistent log of all pageview events
 - **RabbitMQ** — publishes events to a queue for downstream processing
@@ -79,22 +81,27 @@ Activate the virtual enviroment for Python:
 source .venv/bin/activate
 ```
 
-Use [honcho](https://honcho.readthedocs.io/) to run all four processes at once via the `Procfile`:
+Use [honcho](https://honcho.readthedocs.io/) to run all processes at once via the `Procfile`:
 
 ```bash
 uv run honcho start
 ```
 
-This starts the producer, consumer, worker, and API server simultaneously. Each process is labelled in the log output.
+This starts the producer, 4 consumers, worker, and API server simultaneously. Each process is labelled in the log output.
 
 To run individual components instead:
 
 ```bash
 uv run producer
+uv run consumer   # run in 4 separate terminals for full partition coverage
+uv run consumer
+uv run consumer
 uv run consumer
 uv run worker
 uv run api
 ```
+
+Each consumer instance joins the same Kafka consumer group (`pipeline-consumer`), so Kafka automatically assigns one partition to each.
 
 ## Configuration
 
