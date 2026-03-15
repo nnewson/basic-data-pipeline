@@ -1,0 +1,42 @@
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "pipeline"
+
+[project]
+name = "basic-data-pipeline"
+version = "0.1.0"
+description = "Simple basic pipeline to experiment with Kafka, RabbitMQ, Redis, and Cassandra"
+readme = "README.md"
+requires-python = ">=3.13"
+
+dependencies = [
+  "kafka-python-ng",   # For Kafka (maintained fork of kafka-python)
+  "pika",              # For RabbitMQ
+  "redis",             # For Redis
+  "cassandra-driver",  # For Cassandra
+  "fastapi",           # For endpoint API
+  "uvicorn[standard]", # Web server for FastAPI
+  "faker",             # Random data generation
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest", # For testing
+  "ruff",   # For formatting and linting
+  "honcho", # For dev procfile orchestration
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.13"
+include = ["src"]
+
+[project.scripts]
+producer = "pipeline.producer:main"
+consumer = "pipeline.kafka_consumer:main"
+worker = "pipeline.rabbitmq_worker:main"
+api = "pipeline.api:main"
