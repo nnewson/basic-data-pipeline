@@ -4,6 +4,8 @@ This started a while ago as a simple sandbox to play around with system level co
 Then I found myself using those files as my reference for new projects, at which point I realise I need to have a local repo for proper change management.
 And then I thought, I might as well put it in my repo and clean things up (Claude added test and gave me a code review before hand).
 
+Finally, I decide to use `uv` and `uv_build` - as opposed to pip and hatchling - as all the cool-kids are nowadays.  So that was a nice change.
+
 ---
 
 A demo project that wires together Kafka, RabbitMQ, Redis, and Cassandra into a simple event-processing pipeline. Built as a reference example for learning how these technologies connect.
