@@ -33,6 +33,9 @@ def get_partition(username: str, num_partitions: int) -> int:
     Splits the alphabet evenly across partitions:
       4 partitions: a-g → 0, h-m → 1, n-t → 2, u-z → 3
     """
+    if not username:
+        return 0
+
     first_char = username[0].lower()
     if not first_char.isalpha():
         return 0

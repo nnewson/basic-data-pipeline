@@ -7,7 +7,9 @@ import pytest
     "env_var, env_value, config_attr, expected",
     [
         ("KAFKA_TOPIC", "custom-topic", "KAFKA_TOPIC", "custom-topic"),
+        ("KAFKA_STATS_TOPIC", "custom-stats", "KAFKA_STATS_TOPIC", "custom-stats"),
         ("KAFKA_SERVER", "broker:9093", "KAFKA_SERVER", "broker:9093"),
+        ("FLINK_WINDOW_SECONDS", "30", "FLINK_WINDOW_SECONDS", 30),
         ("REDIS_HOST", "redis-server", "REDIS_HOST", "redis-server"),
         ("REDIS_PORT", "6380", "REDIS_PORT", 6380),
         ("RABBITMQ_HOST", "rabbit-server", "RABBITMQ_HOST", "rabbit-server"),
@@ -29,7 +31,9 @@ def test_config_reads_env_vars(monkeypatch, env_var, env_value, config_attr, exp
     "config_attr, expected",
     [
         ("KAFKA_TOPIC", "pageviews"),
+        ("KAFKA_STATS_TOPIC", "pageview_stats"),
         ("KAFKA_SERVER", "localhost:9092"),
+        ("FLINK_WINDOW_SECONDS", 10),
         ("REDIS_HOST", "localhost"),
         ("REDIS_PORT", 6379),
         ("RABBITMQ_HOST", "localhost"),
@@ -42,7 +46,9 @@ def test_config_defaults(monkeypatch, config_attr, expected):
     # Clear any env vars that might be set
     env_vars = [
         "KAFKA_TOPIC",
+        "KAFKA_STATS_TOPIC",
         "KAFKA_SERVER",
+        "FLINK_WINDOW_SECONDS",
         "REDIS_HOST",
         "REDIS_PORT",
         "RABBITMQ_HOST",

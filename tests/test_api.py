@@ -7,6 +7,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pipeline.api import app, get_redis, get_session
+from pipeline.flink_stats_consumer import (
+    LATEST_WINDOW_KEY,
+    page_count_key,
+    page_window_end_key,
+    page_window_start_key,
+)
 
 
 @pytest.fixture
@@ -30,6 +36,20 @@ def client(mock_redis, mock_session):
 # --- page_count ---
 
 
+def test_root_returns_ok(client):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_health_returns_ok(client):
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 @pytest.mark.parametrize(
     "page, redis_value, expected_count",
     [
@@ -46,9 +66,9 @@ def test_page_count(client, mock_redis, page, redis_value, expected_count):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["page"] == page
+    assert data["page"] == f"/{page}"
     assert data["count"] == expected_count
-    mock_redis.get.assert_called_once_with(f"pageviews:{page}")
+    mock_redis.get.assert_called_once_with(f"pageviews:/{page}")
 
 
 def test_page_count_zero_value(client, mock_redis):
@@ -56,6 +76,7 @@ def test_page_count_zero_value(client, mock_redis):
 
     response = client.get("/counts/page/home")
 
+    assert response.json()["page"] == "/home"
     assert response.json()["count"] == 0
 
 
@@ -139,3 +160,67 @@ def test_user_events_passes_user_id_to_query(client, mock_session):
     args = mock_session.execute.call_args[0]
     assert "user_id=%s" in args[0]
     assert args[1] == ("some_user",)
+
+
+# --- Flink stats ---
+
+
+def test_flink_page_count_returns_latest_window(client, mock_redis):
+    mock_redis.get.side_effect = ["42", "2026-07-09T12:00:00.000Z", "2026-07-09T12:00:10.000Z"]
+
+    response = client.get("/flink/counts/page/pricing")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "page": "/pricing",
+        "count": 42,
+        "window_start": "2026-07-09T12:00:00.000Z",
+        "window_end": "2026-07-09T12:00:10.000Z",
+    }
+    assert [call.args[0] for call in mock_redis.get.call_args_list] == [
+        page_count_key("/pricing"),
+        page_window_start_key("/pricing"),
+        page_window_end_key("/pricing"),
+    ]
+
+
+def test_flink_page_count_defaults_to_zero(client, mock_redis):
+    mock_redis.get.side_effect = [None, None, None]
+
+    response = client.get("/flink/counts/page/pricing")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "page": "/pricing",
+        "count": 0,
+        "window_start": None,
+        "window_end": None,
+    }
+
+
+def test_flink_latest_window_returns_latest_record(client, mock_redis):
+    mock_redis.get.return_value = (
+        '{"page": "/docs", "count": 7, '
+        '"window_start": "2026-07-09T12:00:00.000Z", '
+        '"window_end": "2026-07-09T12:00:10.000Z"}'
+    )
+
+    response = client.get("/flink/windows/latest")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "page": "/docs",
+        "count": 7,
+        "window_start": "2026-07-09T12:00:00.000Z",
+        "window_end": "2026-07-09T12:00:10.000Z",
+    }
+    mock_redis.get.assert_called_once_with(LATEST_WINDOW_KEY)
+
+
+def test_flink_latest_window_returns_null_when_empty(client, mock_redis):
+    mock_redis.get.return_value = None
+
+    response = client.get("/flink/windows/latest")
+
+    assert response.status_code == 200
+    assert response.json() is None

@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 import uuid
 
@@ -7,8 +8,6 @@ from kafka import KafkaProducer
 
 from pipeline import get_partition, wait_for_connection
 from pipeline.config import KAFKA_PARTITIONS, KAFKA_SERVER, KAFKA_TOPIC
-
-import logging
 
 logger = logging.getLogger("producer")
 
@@ -25,6 +24,7 @@ def create_event(fake: Faker, pages: list[str]) -> dict:
 def process_messages(producer: KafkaProducer, fake: Faker, pages: list[str]) -> None:
     while True:
         event = create_event(fake, pages)
+        # Route explicitly so the demo can show all four Kafka partitions in use.
         partition = get_partition(event["user_id"], KAFKA_PARTITIONS)
 
         producer.send(KAFKA_TOPIC, event, partition=partition)
@@ -35,7 +35,6 @@ def process_messages(producer: KafkaProducer, fake: Faker, pages: list[str]) -> 
 
 
 def main() -> None:
-    # Setup Kafka producer
     producer = wait_for_connection(
         "Kafka",
         lambda: KafkaProducer(
@@ -44,7 +43,6 @@ def main() -> None:
         ),
     )
 
-    # Setup fake data generator and endpoints
     fake = Faker()
     pages = ["/", "/pricing", "/docs", "/checkout"]
 

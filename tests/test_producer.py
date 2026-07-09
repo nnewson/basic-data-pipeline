@@ -111,6 +111,7 @@ def test_get_partition_routes_by_first_letter(username, num_partitions, expected
 def test_get_partition_non_alpha_defaults_to_zero():
     assert get_partition("123user", 4) == 0
     assert get_partition("_underscore", 4) == 0
+    assert get_partition("", 4) == 0
 
 
 def test_get_partition_result_always_in_range():

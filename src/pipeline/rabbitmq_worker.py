@@ -28,6 +28,8 @@ def main() -> None:
     )
 
     channel = connection.channel()
+    # Each worker process is pointed at one queue with RABBITMQ_QUEUE, for
+    # example analytics_jobs_0, analytics_jobs_1, and so on.
     channel.queue_declare(queue=RABBITMQ_QUEUE)
 
     channel.basic_consume(

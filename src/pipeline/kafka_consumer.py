@@ -1,23 +1,22 @@
 import json
-import redis
-import pika
-
-from kafka import KafkaConsumer
-from cassandra.cluster import Cluster
-
 import logging
+
+from cassandra.cluster import Cluster
+from kafka import KafkaConsumer
+import pika
+import redis
 
 from pipeline import get_partition, wait_for_connection
 from pipeline.config import (
-    KAFKA_TOPIC,
-    KAFKA_SERVER,
-    REDIS_HOST,
-    REDIS_PORT,
     CASSANDRA_HOST,
     KEYSPACE,
+    KAFKA_SERVER,
+    KAFKA_TOPIC,
     RABBITMQ_HOST,
-    RABBITMQ_QUEUE,
     RABBITMQ_PARTITIONS,
+    RABBITMQ_QUEUE,
+    REDIS_HOST,
+    REDIS_PORT,
 )
 
 logger = logging.getLogger("consumer")
@@ -54,14 +53,14 @@ def process_messages(
         update_redis(redis_client, event)
         update_cassandra(session, event)
 
-        queue = get_queue_name(RABBITMQ_QUEUE, get_partition(event["user_id"], RABBITMQ_PARTITIONS))
-        channel.basic_publish(
-            exchange="", routing_key=queue, body=json.dumps(event)
-        )
+        # Keep the downstream RabbitMQ queue aligned with the Kafka partitioning
+        # scheme so the same username range stays on the same worker lane.
+        partition = get_partition(event["user_id"], RABBITMQ_PARTITIONS)
+        queue = get_queue_name(RABBITMQ_QUEUE, partition)
+        channel.basic_publish(exchange="", routing_key=queue, body=json.dumps(event))
 
 
 def main() -> None:
-    # Set up Kafka consumer
     consumer = wait_for_connection(
         "Kafka",
         lambda: KafkaConsumer(
@@ -73,11 +72,9 @@ def main() -> None:
         ),
     )
 
-    # Setup Cassandra session
     cluster = Cluster([CASSANDRA_HOST])
     session = wait_for_connection("Cassandra", lambda: cluster.connect(KEYSPACE))
 
-    # Setup Redis client
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
     connection = wait_for_connection(
         "RabbitMQ",
@@ -89,7 +86,6 @@ def main() -> None:
         channel.queue_declare(queue=get_queue_name(RABBITMQ_QUEUE, i))
 
     try:
-        # Process messages from Kafka to Cassandra and Redis, then publish to RabbitMQ
         process_messages(consumer, redis_client, session, channel)
     except KeyboardInterrupt:
         logger.info("Shutting down consumer")

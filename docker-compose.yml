@@ -23,7 +23,10 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
+      KAFKA_LISTENERS: PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_HOST://127.0.0.1:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_NUM_PARTITIONS: 4
     healthcheck:
@@ -52,6 +55,47 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  flink-jobmanager:
+    image: basic-data-pipeline-flink:2.3.0
+    build:
+      context: .
+      dockerfile: flink.Dockerfile
+    command: jobmanager
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./:/opt/pipeline
+    environment:
+      KAFKA_SERVER: kafka:29092
+      PYTHONPATH: /opt/pipeline/src:/opt/flink/opt/python/pyflink.zip:/opt/flink/opt/python/py4j-0.10.9.7-src.zip:/opt/flink/opt/python/cloudpickle-2.2.0-src.zip
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        rest.address: flink-jobmanager
+        rest.bind-address: 0.0.0.0
+        parallelism.default: 4
+
+  flink-taskmanager:
+    image: basic-data-pipeline-flink:2.3.0
+    build:
+      context: .
+      dockerfile: flink.Dockerfile
+    command: taskmanager
+    depends_on:
+      flink-jobmanager:
+        condition: service_started
+    volumes:
+      - ./:/opt/pipeline
+    environment:
+      KAFKA_SERVER: kafka:29092
+      PYTHONPATH: /opt/pipeline/src:/opt/flink/opt/python/pyflink.zip:/opt/flink/opt/python/py4j-0.10.9.7-src.zip:/opt/flink/opt/python/cloudpickle-2.2.0-src.zip
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 4
 
   cassandra:
     image: cassandra:4

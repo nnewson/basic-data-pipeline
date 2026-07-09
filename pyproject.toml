@@ -5,12 +5,15 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "pipeline"
 
+[tool.uv.extra-build-dependencies]
+apache-beam = ["setuptools<75"]
+
 [project]
 name = "basic-data-pipeline"
 version = "0.1.0"
 description = "Simple basic pipeline to experiment with Kafka, RabbitMQ, Redis, and Cassandra"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12,<3.13"
 
 dependencies = [
   "kafka-python-ng",   # For Kafka (maintained fork of kafka-python)
@@ -20,6 +23,7 @@ dependencies = [
   "fastapi",           # For endpoint API
   "uvicorn[standard]", # Web server for FastAPI
   "faker",             # Random data generation
+  "apache-flink==2.3.0", # Apache Flink Python API
 ]
 
 [project.optional-dependencies]
@@ -33,7 +37,7 @@ dev = [
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-pythonVersion = "3.13"
+pythonVersion = "3.12"
 include = ["src"]
 
 [tool.pytest.ini_options]
@@ -44,3 +48,6 @@ producer = "pipeline.producer:main"
 consumer = "pipeline.kafka_consumer:main"
 worker = "pipeline.rabbitmq_worker:main"
 api = "pipeline.api:main"
+flink-pageview-stats = "pipeline.flink_pageview_stats:main"
+flink-stats-consumer = "pipeline.flink_stats_consumer:main"
+flink-smoke-test = "pipeline.flink_smoke_test:main"

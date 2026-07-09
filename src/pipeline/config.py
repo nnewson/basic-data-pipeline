@@ -1,8 +1,10 @@
 import os
 
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "pageviews")
+KAFKA_STATS_TOPIC = os.environ.get("KAFKA_STATS_TOPIC", "pageview_stats")
 KAFKA_SERVER = os.environ.get("KAFKA_SERVER", "localhost:9092")
 KAFKA_PARTITIONS = int(os.environ.get("KAFKA_PARTITIONS", "4"))
+FLINK_WINDOW_SECONDS = int(os.environ.get("FLINK_WINDOW_SECONDS", "10"))
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
