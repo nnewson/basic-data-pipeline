@@ -262,7 +262,9 @@ def register_ephemeral(
         return OptionalRegistration(None, None)
 
 
-def runtime_metadata(kind: str, identity: str, extra: dict[str, Any] | None = None) -> dict:
+def runtime_metadata(
+    kind: str, identity: str, extra: dict[str, Any] | None = None
+) -> dict:
     payload = {
         "kind": kind,
         "id": identity,

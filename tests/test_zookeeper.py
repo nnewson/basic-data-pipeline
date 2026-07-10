@@ -46,7 +46,9 @@ class FakeClient:
         return self.children.get(path, [])
 
     def create(self, path, value, ephemeral=False, makepath=False):
-        self.created.append((path, json.loads(value.decode("utf-8")), ephemeral, makepath))
+        self.created.append(
+            (path, json.loads(value.decode("utf-8")), ephemeral, makepath)
+        )
         self.values[path] = value
 
     def set(self, path, value):

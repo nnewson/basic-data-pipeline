@@ -5,7 +5,12 @@ from unittest.mock import MagicMock
 import pytest
 
 import pipeline.kafka_consumer as kafka_consumer
-from pipeline.kafka_consumer import get_queue_name, process_messages, update_cassandra, update_redis
+from pipeline.kafka_consumer import (
+    get_queue_name,
+    process_messages,
+    update_cassandra,
+    update_redis,
+)
 from pipeline.realtime_events import PAGEVIEWS_CHANNEL
 
 
@@ -175,17 +180,39 @@ def test_get_queue_name(base, partition, expected):
 def test_process_messages_routes_to_correct_queue():
     """Messages should be routed to the correct RabbitMQ queue based on username."""
     events = [
-        {"event_id": "1", "user_id": "alice", "page": "/", "timestamp": 0},    # a → partition 0
-        {"event_id": "2", "user_id": "harry", "page": "/", "timestamp": 0},    # h → partition 1
-        {"event_id": "3", "user_id": "nancy", "page": "/", "timestamp": 0},    # n → partition 2
-        {"event_id": "4", "user_id": "uma", "page": "/", "timestamp": 0},      # u → partition 3
+        {
+            "event_id": "1",
+            "user_id": "alice",
+            "page": "/",
+            "timestamp": 0,
+        },  # a → partition 0
+        {
+            "event_id": "2",
+            "user_id": "harry",
+            "page": "/",
+            "timestamp": 0,
+        },  # h → partition 1
+        {
+            "event_id": "3",
+            "user_id": "nancy",
+            "page": "/",
+            "timestamp": 0,
+        },  # n → partition 2
+        {
+            "event_id": "4",
+            "user_id": "uma",
+            "page": "/",
+            "timestamp": 0,
+        },  # u → partition 3
     ]
     consumer = [SimpleNamespace(value=e) for e in events]
     channel = MagicMock()
 
     process_messages(consumer, MagicMock(), MagicMock(), channel)
 
-    routing_keys = [call[1]["routing_key"] for call in channel.basic_publish.call_args_list]
+    routing_keys = [
+        call[1]["routing_key"] for call in channel.basic_publish.call_args_list
+    ]
     assert routing_keys == [
         "analytics_jobs_0",
         "analytics_jobs_1",

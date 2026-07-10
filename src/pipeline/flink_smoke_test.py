@@ -209,7 +209,10 @@ def websocket_result_from_message(
     page = message.get("page")
     if not isinstance(page, str):
         return None
-    if expected_type == "flink_window" and int(message.get("count", 0)) < expected_count:
+    if (
+        expected_type == "flink_window"
+        and int(message.get("count", 0)) < expected_count
+    ):
         return None
     return page
 
@@ -235,9 +238,7 @@ async def wait_for_websocket_results(
             except json.JSONDecodeError:
                 continue
 
-            page = websocket_result_from_message(
-                message, expected_type, expected_count
-            )
+            page = websocket_result_from_message(message, expected_type, expected_count)
             if page in pages:
                 seen_pages.add(page)
                 if seen_pages == pages:
@@ -403,7 +404,9 @@ def main() -> None:
             print("Redis bridge output ok.")
 
         if args.api_url:
-            wait_for_api_results(args.api_url, pages, events_per_partition, args.timeout)
+            wait_for_api_results(
+                args.api_url, pages, events_per_partition, args.timeout
+            )
             print(f"FastAPI output ok: {args.api_url}")
     finally:
         consumer.close()
