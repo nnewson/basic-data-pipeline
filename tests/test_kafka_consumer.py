@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import pipeline.kafka_consumer as kafka_consumer
 from pipeline.kafka_consumer import get_queue_name, process_messages, update_cassandra, update_redis
 from pipeline.realtime_events import PAGEVIEWS_CHANNEL
 
@@ -191,3 +192,55 @@ def test_process_messages_routes_to_correct_queue():
         "analytics_jobs_2",
         "analytics_jobs_3",
     ]
+
+
+def test_main_registers_consumer_in_zookeeper(monkeypatch):
+    kafka = MagicMock()
+    session = MagicMock()
+    cluster = MagicMock()
+    cluster.connect.return_value = session
+    redis_client = MagicMock()
+    connection = MagicMock()
+    channel = MagicMock()
+    connection.channel.return_value = channel
+    registration = MagicMock()
+    registrations = []
+
+    monkeypatch.setenv("CONSUMER_ID", "consumer-test")
+    monkeypatch.setattr(kafka_consumer, "KafkaConsumer", lambda *a, **kw: kafka)
+    monkeypatch.setattr(kafka_consumer, "Cluster", lambda hosts: cluster)
+    monkeypatch.setattr(kafka_consumer.redis, "Redis", lambda **kw: redis_client)
+    monkeypatch.setattr(
+        kafka_consumer.pika,
+        "BlockingConnection",
+        lambda params: connection,
+    )
+    monkeypatch.setattr(
+        kafka_consumer,
+        "process_messages",
+        lambda consumer, redis_client, session, channel: None,
+    )
+
+    def register(group, identity, metadata):
+        registrations.append((group, identity, metadata))
+        return registration
+
+    monkeypatch.setattr(kafka_consumer, "register_ephemeral", register)
+
+    kafka_consumer.main()
+
+    assert len(registrations) == 1
+    group, identity, metadata = registrations[0]
+    assert group == "consumers"
+    assert identity == "consumer-test"
+    assert metadata["kind"] == "consumer"
+    assert metadata["id"] == "consumer-test"
+    assert metadata["kafka_topic"] == "pageviews"
+    assert "hostname" in metadata
+    assert "pid" in metadata
+    assert "started_at" in metadata
+    registration.close.assert_called_once()
+    kafka.close.assert_called_once()
+    connection.close.assert_called_once()
+    redis_client.close.assert_called_once()
+    cluster.shutdown.assert_called_once()

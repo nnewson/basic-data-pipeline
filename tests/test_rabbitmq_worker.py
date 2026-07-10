@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import pipeline.rabbitmq_worker as rabbitmq_worker
 from pipeline.rabbitmq_worker import process_job
 
 
@@ -71,3 +72,43 @@ def test_process_job_missing_event_id(mock_redis, mock_channel, mock_method):
 
     with pytest.raises(KeyError):
         process_job(mock_redis, mock_channel, mock_method, None, body)
+
+
+def test_main_registers_worker_in_zookeeper(monkeypatch):
+    redis_client = MagicMock()
+    connection = MagicMock()
+    channel = MagicMock()
+    connection.channel.return_value = channel
+    registration = MagicMock()
+    registrations = []
+
+    monkeypatch.setenv("WORKER_ID", "worker-test")
+    monkeypatch.setattr(rabbitmq_worker.redis, "Redis", lambda **kw: redis_client)
+    monkeypatch.setattr(
+        rabbitmq_worker.pika,
+        "BlockingConnection",
+        lambda params: connection,
+    )
+    channel.start_consuming.return_value = None
+
+    def register(group, identity, metadata):
+        registrations.append((group, identity, metadata))
+        return registration
+
+    monkeypatch.setattr(rabbitmq_worker, "register_ephemeral", register)
+
+    rabbitmq_worker.main()
+
+    assert len(registrations) == 1
+    group, identity, metadata = registrations[0]
+    assert group == "workers"
+    assert identity == "worker-test"
+    assert metadata["kind"] == "worker"
+    assert metadata["id"] == "worker-test"
+    assert metadata["rabbitmq_queue"] == "analytics_jobs"
+    assert "hostname" in metadata
+    assert "pid" in metadata
+    assert "started_at" in metadata
+    registration.close.assert_called_once()
+    connection.close.assert_called_once()
+    redis_client.close.assert_called_once()

@@ -58,8 +58,6 @@ def job_id_from_text(text: str, job_name: str | None = None) -> str | None:
 
 
 def track_active_job(job_id: str | None, status: str, job_name: str) -> None:
-    if not job_id:
-        return
     write_active_flink_job(
         {
             "job_id": job_id,

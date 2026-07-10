@@ -52,6 +52,24 @@ def test_ensure_pageview_stats_job_skips_submit_when_running(monkeypatch):
     assert calls == [flink_job_submitter.flink_command("list", "-r")]
     assert tracked[0]["job_id"] == "0123456789abcdef0123456789abcdef"
     assert tracked[0]["status"] == "running"
+    assert tracked[0]["job_name"] == "pageview-stats"
+    assert "updated_at" in tracked[0]
+
+
+def test_ensure_pageview_stats_job_tracks_running_job_without_parseable_id(monkeypatch):
+    tracked = []
+
+    def runner(command, **kwargs):
+        return completed("01.01.2026 : abc : pageview-stats (RUNNING)")
+
+    monkeypatch.setattr(flink_job_submitter, "write_active_flink_job", tracked.append)
+    submitted = flink_job_submitter.ensure_pageview_stats_job(runner)
+
+    assert submitted is False
+    assert tracked[0]["job_id"] is None
+    assert tracked[0]["job_name"] == "pageview-stats"
+    assert tracked[0]["status"] == "running"
+    assert "updated_at" in tracked[0]
 
 
 def test_ensure_pageview_stats_job_submits_when_missing(monkeypatch):
@@ -82,6 +100,28 @@ def test_ensure_pageview_stats_job_submits_when_missing(monkeypatch):
     ]
     assert tracked[0]["job_id"] == "fedcba9876543210fedcba9876543210"
     assert tracked[0]["status"] == "submitted"
+    assert tracked[0]["job_name"] == "pageview-stats"
+    assert "updated_at" in tracked[0]
+
+
+def test_ensure_pageview_stats_job_tracks_submitted_job_without_parseable_id(
+    monkeypatch,
+):
+    tracked = []
+
+    def runner(command, **kwargs):
+        if command[-2:] == ["list", "-r"]:
+            return completed("")
+        return completed("Job has been submitted.")
+
+    monkeypatch.setattr(flink_job_submitter, "write_active_flink_job", tracked.append)
+    submitted = flink_job_submitter.ensure_pageview_stats_job(runner)
+
+    assert submitted is True
+    assert tracked[0]["job_id"] is None
+    assert tracked[0]["job_name"] == "pageview-stats"
+    assert tracked[0]["status"] == "submitted"
+    assert "updated_at" in tracked[0]
 
 
 def test_job_id_from_text_matches_job_name():
