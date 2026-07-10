@@ -1,3 +1,5 @@
+[![CI](https://github.com/nnewson/basic-data-pipeline/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nnewson/basic-data-pipeline/actions/workflows/ci.yml)
+
 # Basic Data Pipeline
 
 This started as a simple sandbox to play with system-level components and how
