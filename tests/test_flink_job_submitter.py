@@ -41,8 +41,7 @@ def test_ensure_pageview_stats_job_skips_submit_when_running(monkeypatch):
     def runner(command, **kwargs):
         calls.append(command)
         return completed(
-            "01.01.2026 : "
-            "0123456789abcdef0123456789abcdef : pageview-stats (RUNNING)"
+            "01.01.2026 : 0123456789abcdef0123456789abcdef : pageview-stats (RUNNING)"
         )
 
     monkeypatch.setattr(flink_job_submitter, "write_active_flink_job", tracked.append)
@@ -81,8 +80,7 @@ def test_ensure_pageview_stats_job_submits_when_missing(monkeypatch):
         if command[-2:] == ["list", "-r"]:
             return completed("")
         return completed(
-            "Job has been submitted with JobID "
-            "fedcba9876543210fedcba9876543210"
+            "Job has been submitted with JobID fedcba9876543210fedcba9876543210"
         )
 
     monkeypatch.setattr(flink_job_submitter, "write_active_flink_job", tracked.append)

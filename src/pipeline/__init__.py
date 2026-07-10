@@ -20,7 +20,9 @@ def wait_for_connection(
         try:
             return connect()
         except Exception as e:
-            logger.warning(f"{name}: connection attempt {attempt}/{retries} failed: {e}")
+            logger.warning(
+                f"{name}: connection attempt {attempt}/{retries} failed: {e}"
+            )
             if attempt == retries:
                 raise
             time.sleep(delay)

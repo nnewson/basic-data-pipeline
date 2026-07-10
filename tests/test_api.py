@@ -208,7 +208,11 @@ def test_user_events_passes_user_id_to_query(client, mock_session):
 
 
 def test_flink_page_count_returns_latest_window(client, mock_redis):
-    mock_redis.get.side_effect = ["42", "2026-07-09T12:00:00.000Z", "2026-07-09T12:00:10.000Z"]
+    mock_redis.get.side_effect = [
+        "42",
+        "2026-07-09T12:00:00.000Z",
+        "2026-07-09T12:00:10.000Z",
+    ]
 
     response = client.get("/flink/counts/page/pricing")
 

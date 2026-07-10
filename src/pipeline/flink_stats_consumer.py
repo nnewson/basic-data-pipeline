@@ -8,7 +8,11 @@ from kafka import KafkaConsumer
 
 from pipeline import wait_for_connection
 from pipeline.config import KAFKA_SERVER, KAFKA_STATS_TOPIC, REDIS_HOST, REDIS_PORT
-from pipeline.realtime_events import FLINK_WINDOWS_CHANNEL, event_json, flink_window_event
+from pipeline.realtime_events import (
+    FLINK_WINDOWS_CHANNEL,
+    event_json,
+    flink_window_event,
+)
 
 logger = logging.getLogger("flink-stats-consumer")
 
