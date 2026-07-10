@@ -30,6 +30,7 @@ from pipeline.realtime_events import (
     REALTIME_PAGE_PATH,
 )
 from pipeline.realtime_page import realtime_page as realtime_page_html
+from pipeline.zookeeper import read_status as read_zookeeper_status
 
 logger = logging.getLogger("api")
 
@@ -196,6 +197,11 @@ def root() -> Health:
 @app.get("/health")
 def health() -> Health:
     return Health(status="ok")
+
+
+@app.get("/zookeeper/status")
+def zookeeper_status() -> dict:
+    return read_zookeeper_status()
 
 
 @app.get(REALTIME_PAGE_PATH, response_class=HTMLResponse)

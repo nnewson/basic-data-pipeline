@@ -19,6 +19,7 @@ dependencies = [
   "kafka-python-ng",   # For Kafka (maintained fork of kafka-python)
   "pika",              # For RabbitMQ
   "redis",             # For Redis
+  "kazoo",             # For ZooKeeper coordination demo
   "cassandra-driver",  # For Cassandra
   "fastapi",           # For endpoint API
   "uvicorn[standard]", # Web server for FastAPI
@@ -49,6 +50,7 @@ producer = "pipeline.producer:main"
 consumer = "pipeline.kafka_consumer:main"
 worker = "pipeline.rabbitmq_worker:main"
 api = "pipeline.api:main"
+coordinator = "pipeline.zookeeper_coordinator:main"
 flink-pageview-stats = "pipeline.flink_pageview_stats:main"
 flink-job-submitter = "pipeline.flink_job_submitter:main"
 flink-stats-consumer = "pipeline.flink_stats_consumer:main"

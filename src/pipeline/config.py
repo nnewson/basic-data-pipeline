@@ -28,3 +28,7 @@ RABBITMQ_PARTITIONS = int(os.environ.get("RABBITMQ_PARTITIONS", "4"))
 
 CASSANDRA_HOST = os.environ.get("CASSANDRA_HOST", "localhost")
 KEYSPACE = os.environ.get("CASSANDRA_KEYSPACE", "pipeline")
+
+ZOOKEEPER_HOSTS = os.environ.get("ZOOKEEPER_HOSTS", "localhost:2181")
+ZOOKEEPER_ROOT = os.environ.get("ZOOKEEPER_ROOT", "/pipeline")
+ZOOKEEPER_TIMEOUT_SECONDS = float(os.environ.get("ZOOKEEPER_TIMEOUT_SECONDS", "3"))

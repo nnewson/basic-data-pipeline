@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from functools import partial
 
 import pika
@@ -7,6 +8,7 @@ import redis
 
 from pipeline import wait_for_connection
 from pipeline.config import REDIS_HOST, REDIS_PORT, RABBITMQ_HOST, RABBITMQ_QUEUE
+from pipeline.zookeeper import process_identity, register_ephemeral, runtime_metadata
 
 logger = logging.getLogger("worker")
 
@@ -20,6 +22,7 @@ def process_job(redis_client: redis.Redis, ch, method, properties, body) -> None
 
 
 def main() -> None:
+    worker_id = os.environ.get("WORKER_ID", process_identity("worker"))
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
 
     connection = wait_for_connection(
@@ -37,6 +40,12 @@ def main() -> None:
         on_message_callback=partial(process_job, redis_client),
     )
 
+    registration = register_ephemeral(
+        "workers",
+        worker_id,
+        runtime_metadata("worker", worker_id, {"rabbitmq_queue": RABBITMQ_QUEUE}),
+    )
+
     logger.info("Worker started")
     try:
         channel.start_consuming()
@@ -45,6 +54,7 @@ def main() -> None:
     finally:
         connection.close()
         redis_client.close()
+        registration.close()
 
 
 if __name__ == "__main__":

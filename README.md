@@ -34,10 +34,17 @@ Producer --> Kafka: pageviews (4p) ---+             |                        v
                                                    +--> Redis pub/sub: events:flink:windows
                                                                              |
 FastAPI reads Redis and Cassandra and subscribes to Redis pub/sub -----------+
-   |THat 
+   |
    +--> HTTP JSON endpoints
    +--> WebSockets: /ws/pageviews, /ws/flink/windows
    +--> Browser viewer: /realtime
+
+ZooKeeper coordination demo:
+  coordinator --> leader election: /pipeline/election
+  coordinator --> leader status:   /pipeline/leader
+  consumers   --> ephemeral nodes: /pipeline/consumers/*
+  workers     --> ephemeral nodes: /pipeline/workers/*
+  submitter   --> Flink job node:  /pipeline/flink/active-job
 
 Flink dashboard: http://localhost:8081
 FastAPI:         http://localhost:8000
@@ -59,8 +66,14 @@ derived records to the `pageview_stats` Kafka topic.
 **Flink stats consumer** reads `pageview_stats` and mirrors the latest Flink
 window per page into Redis under `flink:*` keys.
 
+**ZooKeeper coordinator** is an optional coordination demo. It elects one
+coordinator leader, tracks active consumer/worker process registrations through
+ephemeral znodes, and exposes the current coordinator state through FastAPI.
+The data pipeline continues to run if the coordinator is not started.
+
 **API** exposes the pipeline data via HTTP endpoints:
 - `GET /health` — API health check
+- `GET /zookeeper/status` — optional ZooKeeper coordinator status
 - `GET /counts/page/{page}` — page view count
 - `GET /users/{user_id}/last-page` — last page a user visited
 - `GET /events/{user_id}` — recent pageview events for a user
@@ -92,6 +105,9 @@ WebSocket clients. It does not consume Kafka directly.
 | PyFlink pageview stats job | `src/pipeline/flink_pageview_stats.py` | Reads `pageviews`, computes event-time tumbling page counts, and writes `pageview_stats`. |
 | Kafka topic `pageview_stats` | `src/pipeline/flink_pageview_stats.py` | Derived Flink output stream used for inspection and API visibility. |
 | Flink Redis bridge | `src/pipeline/flink_stats_consumer.py` | Copies latest Flink window counts from `pageview_stats` into Redis `flink:*` keys. |
+| Flink job submitter | `src/pipeline/flink_job_submitter.py` | Keeps the Flink pageview stats job running and records the active job in ZooKeeper when available. |
+| ZooKeeper coordinator | `src/pipeline/zookeeper_coordinator.py` | Registers coordinator presence and participates in leader election. |
+| ZooKeeper helpers | `src/pipeline/zookeeper.py` | Defines znode paths, JSON helpers, optional registration, status reads, and active Flink job tracking. |
 | Realtime event helpers | `src/pipeline/realtime_events.py` | Defines Redis pub/sub channel names and WebSocket payload shapes. |
 | FastAPI | `src/pipeline/api.py` | Serves Redis/Cassandra data over HTTP, Redis pub/sub messages over WebSockets, and the `/realtime` browser viewer. |
 | Flink smoke test | `src/pipeline/flink_smoke_test.py` | Sends deterministic events through all 4 Kafka partitions and verifies Flink output, optionally Redis, FastAPI, and WebSockets. |
@@ -153,12 +169,13 @@ Use [honcho](https://honcho.readthedocs.io/) to run all processes at once via th
 uv run honcho start
 ```
 
-This starts the producer, 4 consumers, 4 workers, the Flink job submitter,
-the Flink stats consumer, and API server simultaneously. Each process is
-labelled in the log output. The Flink job submitter periodically checks the
-Flink session cluster and submits the pageview stats job if it is not already
-running. The Flink stats consumer waits for the Flink output topic and mirrors
-the latest Flink-derived counts into Redis.
+This starts the producer, 4 consumers, 4 workers, the ZooKeeper coordinator,
+the Flink job submitter, the Flink stats consumer, and API server
+simultaneously. Each process is labelled in the log output. The Flink job
+submitter periodically checks the Flink session cluster and submits the
+pageview stats job if it is not already running. The Flink stats consumer waits
+for the Flink output topic and mirrors the latest Flink-derived counts into
+Redis.
 
 To run individual components instead:
 
@@ -177,6 +194,7 @@ RABBITMQ_QUEUE=analytics_jobs_1 uv run worker
 RABBITMQ_QUEUE=analytics_jobs_2 uv run worker
 RABBITMQ_QUEUE=analytics_jobs_3 uv run worker
 
+uv run coordinator
 uv run flink-job-submitter
 uv run flink-stats-consumer
 uv run api
@@ -194,6 +212,41 @@ http://localhost:8000/realtime
 The page connects to `ws://localhost:8000/ws/pageviews` and
 `ws://localhost:8000/ws/flink/windows`. The Flink stream shows messages after
 the Flink job and `flink-stats-consumer` are running.
+
+## ZooKeeper Coordination
+
+ZooKeeper is used as an optional coordination demo, not as application storage
+and not as a requirement for event processing.
+
+The coordinator process registers itself under `/pipeline/coordinators` and
+uses ZooKeeper leader election under `/pipeline/election`. The active leader
+writes metadata to `/pipeline/leader`. Consumers and workers register
+ephemeral znodes under `/pipeline/consumers` and `/pipeline/workers`; those
+nodes disappear automatically when the process exits or loses its ZooKeeper
+session. The Flink job submitter records the active job under
+`/pipeline/flink/active-job` when ZooKeeper is available.
+
+Run one coordinator:
+
+```bash
+uv run coordinator
+```
+
+Run a second coordinator in another terminal to see leader election in action.
+Only one process writes `/pipeline/leader`.
+
+Inspect status through FastAPI:
+
+```bash
+curl http://localhost:8000/zookeeper/status
+```
+
+Inspect znodes directly:
+
+```bash
+docker compose exec zookeeper zookeeper-shell localhost:2181 ls /pipeline
+docker compose exec zookeeper zookeeper-shell localhost:2181 get /pipeline/leader
+```
 
 ## Configuration
 
@@ -217,6 +270,9 @@ All settings default to `localhost` for local development. Override via environm
 | `RABBITMQ_PARTITIONS`| `4`                  | Number of RabbitMQ queues |
 | `CASSANDRA_HOST`     | `localhost`          | Cassandra host            |
 | `CASSANDRA_KEYSPACE` | `pipeline`           | Cassandra keyspace        |
+| `ZOOKEEPER_HOSTS`    | `localhost:2181`     | ZooKeeper connection string |
+| `ZOOKEEPER_ROOT`     | `/pipeline`          | Root znode for the demo coordination tree |
+| `ZOOKEEPER_TIMEOUT_SECONDS`| `3`            | ZooKeeper client connection timeout |
 
 ## Flink Stats
 
@@ -343,6 +399,9 @@ curl http://localhost:8000/flink/counts/page/pricing
 
 # Get the latest Flink-derived window seen by the bridge consumer
 curl http://localhost:8000/flink/windows/latest
+
+# Get optional ZooKeeper coordination status
+curl http://localhost:8000/zookeeper/status
 ```
 
 Example responses:
@@ -370,6 +429,17 @@ Example responses:
   "count": 42,
   "window_start": "2026-07-09T12:00:00.000Z",
   "window_end": "2026-07-09T12:00:10.000Z"
+}
+
+// GET /zookeeper/status
+{
+  "connected": true,
+  "leader": {"coordinator_id": "coordinator-host-1234-abcd"},
+  "coordinators": ["coordinator-host-1234-abcd"],
+  "workers": ["worker-host-1234-abcd"],
+  "consumers": ["consumer-host-1234-abcd"],
+  "flink": {"active_job": {"job_name": "pageview-stats"}},
+  "control": {"paused": false}
 }
 ```
 

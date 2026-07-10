@@ -144,6 +144,7 @@ dependencies = [
     { name = "faker" },
     { name = "fastapi" },
     { name = "kafka-python-ng" },
+    { name = "kazoo" },
     { name = "pika" },
     { name = "redis" },
     { name = "uvicorn", extra = ["standard"] },
@@ -167,6 +168,7 @@ requires-dist = [
     { name = "honcho", marker = "extra == 'dev'" },
     { name = "httpx", marker = "extra == 'dev'" },
     { name = "kafka-python-ng" },
+    { name = "kazoo" },
     { name = "pika" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "redis" },
@@ -531,6 +533,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ce/04/1d65bdf3f0103a08710e226b851de4b357ac702f1cadabf6128bab7518a7/kafka_python_ng-2.2.3.tar.gz", hash = "sha256:f79f28e10ade9b5a9860b2ec15b7cc8dc510d5702f5a399430478cff5f93a05a", size = 330644, upload-time = "2024-10-02T16:56:58.639Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0f/61/22e778f642465a157c449782300d8817ebbc106794a8a7ebe88cbb846b05/kafka_python_ng-2.2.3-py2.py3-none-any.whl", hash = "sha256:adc6e82147c441ca4ae1f22e291fc08efab0d10971cbd4aa1481d2ffa38e9480", size = 232824, upload-time = "2024-10-02T16:56:56.932Z" },
+]
+
+[[package]]
+name = "kazoo"
+version = "2.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ac/07/2cdc0daaa2199fecaee28ee9051afedeccb46c818b2c47fc32b7383905d5/kazoo-2.11.0.tar.gz", hash = "sha256:57e7e6f69295c8f922511488eeb79680729e14bb8eb382d5cad83aa11345c36c", size = 186460, upload-time = "2026-03-21T19:08:53.702Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/91/b9/5328ff14f7d637ac90f7144d4aad27b17bdd063325c9fb4b88c4e1f109fe/kazoo-2.11.0-py2.py3-none-any.whl", hash = "sha256:aa6be17159540dae4087661b8d4e24c7b58d4dc26170a2d5b8468b06712d84a9", size = 150943, upload-time = "2026-03-21T19:08:52.575Z" },
 ]
 
 [[package]]

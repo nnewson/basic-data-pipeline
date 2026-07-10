@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 from cassandra.cluster import Cluster
 from kafka import KafkaConsumer
@@ -19,6 +20,7 @@ from pipeline.config import (
     REDIS_PORT,
 )
 from pipeline.realtime_events import PAGEVIEWS_CHANNEL, event_json, pageview_event
+from pipeline.zookeeper import process_identity, register_ephemeral, runtime_metadata
 
 logger = logging.getLogger("consumer")
 
@@ -63,6 +65,7 @@ def process_messages(
 
 
 def main() -> None:
+    consumer_id = os.environ.get("CONSUMER_ID", process_identity("consumer"))
     consumer = wait_for_connection(
         "Kafka",
         lambda: KafkaConsumer(
@@ -87,6 +90,12 @@ def main() -> None:
     for i in range(RABBITMQ_PARTITIONS):
         channel.queue_declare(queue=get_queue_name(RABBITMQ_QUEUE, i))
 
+    registration = register_ephemeral(
+        "consumers",
+        consumer_id,
+        runtime_metadata("consumer", consumer_id, {"kafka_topic": KAFKA_TOPIC}),
+    )
+
     try:
         process_messages(consumer, redis_client, session, channel)
     except KeyboardInterrupt:
@@ -96,6 +105,7 @@ def main() -> None:
         connection.close()
         redis_client.close()
         cluster.shutdown()
+        registration.close()
 
 
 if __name__ == "__main__":

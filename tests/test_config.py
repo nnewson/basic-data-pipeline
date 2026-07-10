@@ -16,6 +16,9 @@ import pytest
         ("RABBITMQ_QUEUE", "custom_queue", "RABBITMQ_QUEUE", "custom_queue"),
         ("CASSANDRA_HOST", "cassandra-server", "CASSANDRA_HOST", "cassandra-server"),
         ("CASSANDRA_KEYSPACE", "custom_ks", "KEYSPACE", "custom_ks"),
+        ("ZOOKEEPER_HOSTS", "zk:2181", "ZOOKEEPER_HOSTS", "zk:2181"),
+        ("ZOOKEEPER_ROOT", "/custom", "ZOOKEEPER_ROOT", "/custom"),
+        ("ZOOKEEPER_TIMEOUT_SECONDS", "5.5", "ZOOKEEPER_TIMEOUT_SECONDS", 5.5),
     ],
 )
 def test_config_reads_env_vars(monkeypatch, env_var, env_value, config_attr, expected):
@@ -40,6 +43,9 @@ def test_config_reads_env_vars(monkeypatch, env_var, env_value, config_attr, exp
         ("RABBITMQ_QUEUE", "analytics_jobs"),
         ("CASSANDRA_HOST", "localhost"),
         ("KEYSPACE", "pipeline"),
+        ("ZOOKEEPER_HOSTS", "localhost:2181"),
+        ("ZOOKEEPER_ROOT", "/pipeline"),
+        ("ZOOKEEPER_TIMEOUT_SECONDS", 3.0),
     ],
 )
 def test_config_defaults(monkeypatch, config_attr, expected):
@@ -55,6 +61,9 @@ def test_config_defaults(monkeypatch, config_attr, expected):
         "RABBITMQ_QUEUE",
         "CASSANDRA_HOST",
         "CASSANDRA_KEYSPACE",
+        "ZOOKEEPER_HOSTS",
+        "ZOOKEEPER_ROOT",
+        "ZOOKEEPER_TIMEOUT_SECONDS",
     ]
     for var in env_vars:
         monkeypatch.delenv(var, raising=False)

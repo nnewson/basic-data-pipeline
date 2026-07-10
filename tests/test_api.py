@@ -65,6 +65,25 @@ def test_realtime_returns_websocket_test_page(client):
     assert FLINK_WINDOWS_WS_PATH in response.text
 
 
+def test_zookeeper_status_returns_snapshot(client, monkeypatch):
+    expected = {
+        "connected": True,
+        "leader": {"coordinator_id": "coordinator-1"},
+        "coordinators": ["coordinator-1"],
+        "workers": [],
+        "consumers": [],
+        "flink": {"active_job": None},
+        "control": {"paused": False},
+    }
+
+    monkeypatch.setattr("pipeline.api.read_zookeeper_status", lambda: expected)
+
+    response = client.get("/zookeeper/status")
+
+    assert response.status_code == 200
+    assert response.json() == expected
+
+
 @pytest.mark.parametrize(
     "page, redis_value, expected_count",
     [
