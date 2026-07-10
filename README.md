@@ -108,6 +108,7 @@ WebSocket clients. It does not consume Kafka directly.
 | Flink job submitter | `src/pipeline/flink_job_submitter.py` | Keeps the Flink pageview stats job running and records the active job in ZooKeeper when available. |
 | ZooKeeper coordinator | `src/pipeline/zookeeper_coordinator.py` | Registers coordinator presence and participates in leader election. |
 | ZooKeeper helpers | `src/pipeline/zookeeper.py` | Defines znode paths, JSON helpers, optional registration, status reads, and active Flink job tracking. |
+| ZooKeeper status CLI | `src/pipeline/zookeeper_status.py` | Prints leader, registration counts, and active Flink job details for failover demos. |
 | Realtime event helpers | `src/pipeline/realtime_events.py` | Defines Redis pub/sub channel names and WebSocket payload shapes. |
 | FastAPI | `src/pipeline/api.py` | Serves Redis/Cassandra data over HTTP, Redis pub/sub messages over WebSockets, and the `/realtime` browser viewer. |
 | Flink smoke test | `src/pipeline/flink_smoke_test.py` | Sends deterministic events through all 4 Kafka partitions and verifies Flink output, optionally Redis, FastAPI, and WebSockets. |
@@ -235,10 +236,46 @@ uv run coordinator
 Run a second coordinator in another terminal to see leader election in action.
 Only one process writes `/pipeline/leader`.
 
+For a failover demo, run `uv run api` separately from the coordinator
+processes. If the coordinator is supervised by `honcho`, terminating it can stop
+the rest of the Procfile, including the API. With the API running separately,
+start two coordinators with explicit ids, read the leader pid from
+`/zookeeper/status`, terminate that pid, and verify the standby becomes leader.
+
 Inspect status through FastAPI:
 
 ```bash
 curl http://localhost:8000/zookeeper/status
+```
+
+Or print the same status in a compact terminal format:
+
+```bash
+uv run zookeeper-status
+```
+
+Use `--json` when you want the raw API-style payload:
+
+```bash
+uv run zookeeper-status --json
+```
+
+Safe failover demo:
+
+```bash
+# terminal 1
+uv run api
+
+# terminal 2
+COORDINATOR_ID=leader-demo-1 uv run coordinator
+
+# terminal 3
+COORDINATOR_ID=leader-demo-2 uv run coordinator
+
+# terminal 4
+uv run zookeeper-status
+kill -TERM <leader_pid_from_status>
+uv run zookeeper-status
 ```
 
 Inspect znodes directly:

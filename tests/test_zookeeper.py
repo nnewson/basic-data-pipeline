@@ -13,6 +13,7 @@ from pipeline.zookeeper import (
     unavailable_status,
 )
 from pipeline.zookeeper_coordinator import coordinator_metadata
+from pipeline.zookeeper_status import format_status
 
 
 class FakeClient:
@@ -87,12 +88,20 @@ def test_status_snapshot_shapes_children_and_json_values():
 
     assert status_snapshot(client, paths) == {
         "connected": True,
+        "zookeeper_root": "/pipeline",
         "leader": {"coordinator_id": "c1"},
         "coordinators": ["c1"],
         "workers": ["w1"],
         "consumers": ["consumer1"],
         "flink": {"active_job": {"job_id": "abc"}},
         "control": {"paused": True},
+        "summary": {
+            "has_leader": True,
+            "coordinator_count": 1,
+            "worker_count": 1,
+            "consumer_count": 1,
+            "active_flink_job_id": "abc",
+        },
     }
 
 
@@ -140,3 +149,26 @@ def test_coordinator_metadata_shape():
     assert "hostname" in metadata
     assert "pid" in metadata
     assert "started_at" in metadata
+
+
+def test_format_status_prints_leader_and_counts():
+    output = format_status(
+        {
+            "connected": True,
+            "zookeeper_root": "/pipeline",
+            "leader": {"coordinator_id": "c1", "pid": 123},
+            "flink": {"active_job": {"job_id": "job-1", "job_name": "pageview-stats"}},
+            "summary": {
+                "has_leader": True,
+                "coordinator_count": 2,
+                "worker_count": 4,
+                "consumer_count": 4,
+                "active_flink_job_id": "job-1",
+            },
+        }
+    )
+
+    assert "leader_id: c1" in output
+    assert "leader_pid: 123" in output
+    assert "coordinators: 2" in output
+    assert "active_flink_job_name: pageview-stats" in output

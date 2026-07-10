@@ -147,18 +147,31 @@ def delete_if_owned(client: KazooClient, path: str) -> None:
 
 
 def status_snapshot(client: KazooClient, paths: ZooKeeperPaths) -> dict[str, Any]:
+    leader = get_json(client, paths.leader)
+    coordinators = get_children(client, paths.coordinators)
+    workers = get_children(client, paths.workers)
+    consumers = get_children(client, paths.consumers)
+    active_job = get_json(client, paths.active_flink_job)
     paused = get_json(client, paths.pause)
     return {
         "connected": True,
-        "leader": get_json(client, paths.leader),
-        "coordinators": get_children(client, paths.coordinators),
-        "workers": get_children(client, paths.workers),
-        "consumers": get_children(client, paths.consumers),
+        "zookeeper_root": paths.root,
+        "leader": leader,
+        "coordinators": coordinators,
+        "workers": workers,
+        "consumers": consumers,
         "flink": {
-            "active_job": get_json(client, paths.active_flink_job),
+            "active_job": active_job,
         },
         "control": {
             "paused": bool(paused and paused.get("paused")),
+        },
+        "summary": {
+            "has_leader": leader is not None,
+            "coordinator_count": len(coordinators),
+            "worker_count": len(workers),
+            "consumer_count": len(consumers),
+            "active_flink_job_id": active_job.get("job_id") if active_job else None,
         },
     }
 
@@ -167,12 +180,20 @@ def unavailable_status(error: str) -> dict[str, Any]:
     return {
         "connected": False,
         "error": error,
+        "zookeeper_root": ZOOKEEPER_ROOT,
         "leader": None,
         "coordinators": [],
         "workers": [],
         "consumers": [],
         "flink": {"active_job": None},
         "control": {"paused": False},
+        "summary": {
+            "has_leader": False,
+            "coordinator_count": 0,
+            "worker_count": 0,
+            "consumer_count": 0,
+            "active_flink_job_id": None,
+        },
     }
 
 

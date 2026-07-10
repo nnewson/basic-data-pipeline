@@ -68,12 +68,20 @@ def test_realtime_returns_websocket_test_page(client):
 def test_zookeeper_status_returns_snapshot(client, monkeypatch):
     expected = {
         "connected": True,
+        "zookeeper_root": "/pipeline",
         "leader": {"coordinator_id": "coordinator-1"},
         "coordinators": ["coordinator-1"],
         "workers": [],
         "consumers": [],
         "flink": {"active_job": None},
         "control": {"paused": False},
+        "summary": {
+            "has_leader": True,
+            "coordinator_count": 1,
+            "worker_count": 0,
+            "consumer_count": 0,
+            "active_flink_job_id": None,
+        },
     }
 
     monkeypatch.setattr("pipeline.api.read_zookeeper_status", lambda: expected)
