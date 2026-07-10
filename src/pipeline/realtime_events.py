@@ -3,6 +3,9 @@ from typing import Any
 
 PAGEVIEWS_CHANNEL = "events:pageviews"
 FLINK_WINDOWS_CHANNEL = "events:flink:windows"
+REALTIME_PAGE_PATH = "/realtime"
+PAGEVIEWS_WS_PATH = "/ws/pageviews"
+FLINK_WINDOWS_WS_PATH = "/ws/flink/windows"
 
 
 def pageview_event(event: dict[str, Any]) -> dict[str, Any]:

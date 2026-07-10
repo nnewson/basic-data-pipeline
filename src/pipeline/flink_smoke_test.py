@@ -25,6 +25,7 @@ from pipeline.config import (
     REDIS_PORT,
 )
 from pipeline.flink_stats_consumer import LATEST_WINDOW_KEY, page_count_key
+from pipeline.realtime_events import FLINK_WINDOWS_WS_PATH, PAGEVIEWS_WS_PATH
 
 
 @dataclass(frozen=True)
@@ -259,7 +260,7 @@ async def run_websocket_checked_smoke(
     flink_ready = asyncio.Event()
     pageview_task = asyncio.create_task(
         wait_for_websocket_results(
-            websocket_url(api_url, "/ws/pageviews"),
+            websocket_url(api_url, PAGEVIEWS_WS_PATH),
             pages,
             "pageview",
             1,
@@ -269,7 +270,7 @@ async def run_websocket_checked_smoke(
     )
     flink_task = asyncio.create_task(
         wait_for_websocket_results(
-            websocket_url(api_url, "/ws/flink/windows"),
+            websocket_url(api_url, FLINK_WINDOWS_WS_PATH),
             pages,
             "flink_window",
             events_per_partition,
@@ -319,8 +320,8 @@ async def run_websocket_checked_smoke(
         )
 
     print("WebSocket output ok:")
-    print(f"  {websocket_url(api_url, '/ws/pageviews')}")
-    print(f"  {websocket_url(api_url, '/ws/flink/windows')}")
+    print(f"  {websocket_url(api_url, PAGEVIEWS_WS_PATH)}")
+    print(f"  {websocket_url(api_url, FLINK_WINDOWS_WS_PATH)}")
 
 
 def print_flink_results(results: dict[str, SmokeResult]) -> None:

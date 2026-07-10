@@ -3,16 +3,33 @@ from types import SimpleNamespace
 
 from pipeline.realtime_events import (
     FLINK_WINDOWS_CHANNEL,
+    FLINK_WINDOWS_WS_PATH,
     PAGEVIEWS_CHANNEL,
+    PAGEVIEWS_WS_PATH,
+    REALTIME_PAGE_PATH,
     event_json,
     flink_window_event,
     pageview_event,
 )
+from pipeline.realtime_page import realtime_page
 
 
 def test_channels_are_stable():
     assert PAGEVIEWS_CHANNEL == "events:pageviews"
     assert FLINK_WINDOWS_CHANNEL == "events:flink:windows"
+
+
+def test_realtime_paths_are_stable():
+    assert REALTIME_PAGE_PATH == "/realtime"
+    assert PAGEVIEWS_WS_PATH == "/ws/pageviews"
+    assert FLINK_WINDOWS_WS_PATH == "/ws/flink/windows"
+
+
+def test_realtime_page_references_websocket_paths():
+    page = realtime_page()
+
+    assert PAGEVIEWS_WS_PATH in page
+    assert FLINK_WINDOWS_WS_PATH in page
 
 
 def test_pageview_event_payload():

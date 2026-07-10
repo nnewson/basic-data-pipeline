@@ -14,6 +14,11 @@ from pipeline.flink_stats_consumer import (
     page_window_end_key,
     page_window_start_key,
 )
+from pipeline.realtime_events import (
+    FLINK_WINDOWS_WS_PATH,
+    PAGEVIEWS_WS_PATH,
+    REALTIME_PAGE_PATH,
+)
 
 
 @pytest.fixture
@@ -52,12 +57,12 @@ def test_health_returns_ok(client):
 
 
 def test_realtime_returns_websocket_test_page(client):
-    response = client.get("/realtime")
+    response = client.get(REALTIME_PAGE_PATH)
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "/ws/pageviews" in response.text
-    assert "/ws/flink/windows" in response.text
+    assert PAGEVIEWS_WS_PATH in response.text
+    assert FLINK_WINDOWS_WS_PATH in response.text
 
 
 @pytest.mark.parametrize(
