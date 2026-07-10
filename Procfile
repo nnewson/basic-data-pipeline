@@ -11,3 +11,4 @@ coordinator: uv run coordinator
 flink_job_submitter: uv run flink-job-submitter
 flink_stats_consumer: uv run flink-stats-consumer
 api: uv run api
+grpc_events_server: uv run grpc-events-server

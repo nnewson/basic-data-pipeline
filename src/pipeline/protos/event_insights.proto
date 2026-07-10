@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package pipeline.grpc_example;
+
+service EventInsights {
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  rpc GetUserStats(UserStatsRequest) returns (UserStatsResponse);
+}
+
+message ListUsersRequest {
+  int32 limit = 1;
+}
+
+message ListUsersResponse {
+  repeated string user_ids = 1;
+}
+
+message UserStatsRequest {
+  string user_id = 1;
+  int32 limit = 2;
+}
+
+message PageCount {
+  string page = 1;
+  int32 count = 2;
+}
+
+message PageView {
+  string event_id = 1;
+  string event_time = 2;
+  string page = 3;
+}
+
+message UserStatsResponse {
+  string user_id = 1;
+  int32 event_count = 2;
+  repeated PageCount page_counts = 3;
+  repeated PageView recent_events = 4;
+  string last_page = 5;
+}

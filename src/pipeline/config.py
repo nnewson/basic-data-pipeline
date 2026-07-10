@@ -32,3 +32,7 @@ KEYSPACE = os.environ.get("CASSANDRA_KEYSPACE", "pipeline")
 ZOOKEEPER_HOSTS = os.environ.get("ZOOKEEPER_HOSTS", "localhost:2181")
 ZOOKEEPER_ROOT = os.environ.get("ZOOKEEPER_ROOT", "/pipeline")
 ZOOKEEPER_TIMEOUT_SECONDS = float(os.environ.get("ZOOKEEPER_TIMEOUT_SECONDS", "3"))
+
+GRPC_HOST = os.environ.get("GRPC_HOST", "[::]")
+GRPC_PORT = int(os.environ.get("GRPC_PORT", "50051"))
+GRPC_TARGET = os.environ.get("GRPC_TARGET", "localhost:50051")

@@ -4,8 +4,8 @@
 
 This started as a simple sandbox to play with system-level components and how
 to glue them together with Python. It now serves as a local reference project
-for Kafka, RabbitMQ, Redis, Cassandra, Flink, FastAPI WebSockets, and ZooKeeper
-coordination.
+for Kafka, RabbitMQ, Redis, Cassandra, Flink, FastAPI WebSockets, gRPC, and
+ZooKeeper coordination.
 
 ---
 
@@ -17,30 +17,34 @@ these technologies connect.
 
 ```text
                                       +--> Python consumers (x4) --> Redis (counters)
-                                      |             |           +--> Cassandra (events)
-                                      |             |           +--> RabbitMQ queues (x4)
-                                      |             |                        |
-Producer --> Kafka: pageviews (4p) ---+             |                        v
-                                      |             |           Workers (x4) --> Redis (job status)
-                                      |             |
-                                      |             +--> Redis pub/sub: events:pageviews
-                                      |                                      |
-                                      +--> PyFlink pageview-stats job        |
-                                                   |                         |
-                                                   v                         |
-                                          Kafka: pageview_stats              |
-                                                   |                         |
-                                                   v                         |
-                                          flink-stats-consumer               |
-                                                   |                         |
+                                      |            |            +--> Cassandra (events)
+                                      |            |            +--> RabbitMQ queues (x4)
+                                      |            |            |            |
+Producer --> Kafka: pageviews (4p) ---+            |            |            v
+                                      |            |            |   Workers (x4) --> Redis (jobs)
+                                      |            |            |
+                                      |            |            +--> Redis pub/sub: events:pageviews
+                                      |            |
+                                      +--> PyFlink pageview-stats job
+                                                   |
+                                                   v
+                                          Kafka: pageview_stats
+                                                   |
+                                                   v
+                                          flink-stats-consumer
+                                                   |
                                                    +--> Redis (flink:* stats)
                                                    +--> Redis pub/sub: events:flink:windows
-                                                                             |
-FastAPI reads Redis and Cassandra and subscribes to Redis pub/sub -----------+
-   |
-   +--> HTTP JSON endpoints
-   +--> WebSockets: /ws/pageviews, /ws/flink/windows
-   +--> Browser viewer: /realtime
+
+Serving/read side:
+  Redis (counters, jobs, flink:* stats) ----------+
+  Cassandra (events) -----------------------------+--> FastAPI
+  Redis pub/sub: events:pageviews ----------------+      |
+  Redis pub/sub: events:flink:windows ------------+      +--> HTTP JSON endpoints
+                                                         +--> WebSockets: /ws/pageviews, /ws/flink/windows
+                                                         +--> Browser viewer: /realtime
+
+  Cassandra (events) --> grpc-events-server --> grpc-events-client
 
 ZooKeeper coordination demo:
   coordinator --> leader election: /pipeline/election
@@ -51,6 +55,7 @@ ZooKeeper coordination demo:
 
 Flink dashboard: http://localhost:8081
 FastAPI:         http://localhost:8000
+gRPC demo:       localhost:50051
 ```
 
 **Producer** generates fake pageview events and routes them to one of 4 Kafka
@@ -74,6 +79,9 @@ FastAPI. The pipeline continues to run if ZooKeeper is not started.
 **FastAPI** exposes HTTP snapshots, WebSocket streams, and the `/realtime`
 browser viewer.
 
+**gRPC event insights demo** exposes a protobuf service that reads Cassandra
+pageview events, lists users, and returns per-user page counts.
+
 ## Architecture Legend
 
 | Architecture part | Code / config | What it does |
@@ -91,6 +99,7 @@ browser viewer.
 | ZooKeeper status CLI | `src/pipeline/zookeeper_status.py` | Prints leader, registration counts, and active Flink job details for failover demos. |
 | Realtime helpers | `src/pipeline/realtime_events.py`, `src/pipeline/realtime_page.py` | Define Redis pub/sub channel names, WebSocket payloads, and the `/realtime` page. |
 | FastAPI | `src/pipeline/api.py` | Serves Redis/Cassandra data over HTTP and Redis pub/sub messages over WebSockets. |
+| gRPC event insights demo | `src/pipeline/protos/event_insights.proto`, `src/pipeline/grpc_event_insights_server.py`, `src/pipeline/grpc_event_insights_client.py` | Demonstrates a protobuf-backed gRPC service over Cassandra event data. |
 | Flink smoke test | `src/pipeline/flink_smoke_test.py` | Sends deterministic events through all 4 Kafka partitions and verifies Flink output, optionally Redis, FastAPI, and WebSockets. |
 | Local orchestration | `docker-compose.yml`, `Procfile` | Starts infrastructure containers and host Python processes for local development. |
 
@@ -131,13 +140,15 @@ uv run honcho start
 ```
 
 This starts the producer, 4 consumers, 4 workers, the ZooKeeper coordinator,
-the Flink job submitter, the Flink stats consumer, and FastAPI.
+the Flink job submitter, the Flink stats consumer, FastAPI, and the gRPC event
+insights demo server.
 
 ## Useful URLs and Commands
 
 ```text
 FastAPI:         http://localhost:8000
 Realtime page:   http://localhost:8000/realtime
+gRPC demo:       localhost:50051
 Flink dashboard: http://localhost:8081
 RabbitMQ UI:     http://localhost:15672
 ```
@@ -150,6 +161,7 @@ curl http://localhost:8000/counts/page/pricing
 curl http://localhost:8000/flink/windows/latest
 curl http://localhost:8000/zookeeper/status
 uv run zookeeper-status
+uv run grpc-events-client inspect-first-user --limit 5
 ```
 
 Run individual host processes:
@@ -162,6 +174,7 @@ uv run coordinator
 uv run flink-job-submitter
 uv run flink-stats-consumer
 uv run api
+uv run grpc-events-server
 ```
 
 ## API Surface
@@ -178,6 +191,12 @@ uv run api
 - `WS /ws/flink/windows`
 
 FastAPI also generates interactive API docs at http://localhost:8000/docs.
+
+The gRPC demo exposes `pipeline.grpc_example.EventInsights` on
+`localhost:50051` by default:
+
+- `ListUsers(ListUsersRequest) returns (ListUsersResponse)`
+- `GetUserStats(UserStatsRequest) returns (UserStatsResponse)`
 
 ## Configuration
 
@@ -205,6 +224,9 @@ environment variables:
 | `ZOOKEEPER_HOSTS` | `localhost:2181` | ZooKeeper connection string |
 | `ZOOKEEPER_ROOT` | `/pipeline` | Root znode for the demo coordination tree |
 | `ZOOKEEPER_TIMEOUT_SECONDS` | `3` | ZooKeeper client connection timeout |
+| `GRPC_HOST` | `[::]` | gRPC event insights server bind host |
+| `GRPC_PORT` | `50051` | gRPC event insights server bind port |
+| `GRPC_TARGET` | `localhost:50051` | gRPC event insights client target |
 
 ## Detailed Docs
 
@@ -214,6 +236,8 @@ environment variables:
   inspection, and ZooKeeper-specific configuration.
 - [Troubleshooting](docs/troubleshooting.md): API examples, Flink output
   debugging, Kafka/Cassandra/Redis inspection commands, and management UIs.
+- [gRPC](docs/grpc.md): protobuf contract, server/client commands, and the
+  Cassandra-backed event insights example.
 
 ## Testing
 
@@ -241,6 +265,9 @@ src/pipeline/
     api.py
     realtime_events.py
     realtime_page.py
+    grpc_event_insights_server.py
+    grpc_event_insights_client.py
+    protos/
     zookeeper.py
     zookeeper_coordinator.py
     zookeeper_status.py
@@ -251,6 +278,7 @@ tests/
     test_flink_job_submitter.py
     test_flink_smoke_test.py
     test_flink_stats_consumer.py
+    test_grpc_event_insights.py
     test_kafka_consumer.py
     test_producer.py
     test_rabbitmq_worker.py

@@ -24,6 +24,7 @@ dependencies = [
   "fastapi",           # For endpoint API
   "uvicorn[standard]", # Web server for FastAPI
   "websockets",        # For smoke-test WebSocket clients
+  "grpcio",            # For gRPC examples
   "faker",             # Random data generation
   "apache-flink==2.3.0", # Apache Flink Python API
 ]
@@ -56,3 +57,5 @@ flink-pageview-stats = "pipeline.flink_pageview_stats:main"
 flink-job-submitter = "pipeline.flink_job_submitter:main"
 flink-stats-consumer = "pipeline.flink_stats_consumer:main"
 flink-smoke-test = "pipeline.flink_smoke_test:main"
+grpc-events-server = "pipeline.grpc_event_insights_server:main"
+grpc-events-client = "pipeline.grpc_event_insights_client:main"

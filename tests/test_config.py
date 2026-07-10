@@ -19,6 +19,9 @@ import pytest
         ("ZOOKEEPER_HOSTS", "zk:2181", "ZOOKEEPER_HOSTS", "zk:2181"),
         ("ZOOKEEPER_ROOT", "/custom", "ZOOKEEPER_ROOT", "/custom"),
         ("ZOOKEEPER_TIMEOUT_SECONDS", "5.5", "ZOOKEEPER_TIMEOUT_SECONDS", 5.5),
+        ("GRPC_HOST", "127.0.0.1", "GRPC_HOST", "127.0.0.1"),
+        ("GRPC_PORT", "50052", "GRPC_PORT", 50052),
+        ("GRPC_TARGET", "127.0.0.1:50052", "GRPC_TARGET", "127.0.0.1:50052"),
     ],
 )
 def test_config_reads_env_vars(monkeypatch, env_var, env_value, config_attr, expected):
@@ -46,6 +49,9 @@ def test_config_reads_env_vars(monkeypatch, env_var, env_value, config_attr, exp
         ("ZOOKEEPER_HOSTS", "localhost:2181"),
         ("ZOOKEEPER_ROOT", "/pipeline"),
         ("ZOOKEEPER_TIMEOUT_SECONDS", 3.0),
+        ("GRPC_HOST", "[::]"),
+        ("GRPC_PORT", 50051),
+        ("GRPC_TARGET", "localhost:50051"),
     ],
 )
 def test_config_defaults(monkeypatch, config_attr, expected):
@@ -64,6 +70,9 @@ def test_config_defaults(monkeypatch, config_attr, expected):
         "ZOOKEEPER_HOSTS",
         "ZOOKEEPER_ROOT",
         "ZOOKEEPER_TIMEOUT_SECONDS",
+        "GRPC_HOST",
+        "GRPC_PORT",
+        "GRPC_TARGET",
     ]
     for var in env_vars:
         monkeypatch.delenv(var, raising=False)
