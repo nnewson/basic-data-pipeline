@@ -14,26 +14,30 @@ A demo project that wires together Kafka, RabbitMQ, Redis, and Cassandra into a 
 
 ```
                                       +--> Python consumers (x4) --> Redis (counters)
-                                      |                         +--> Cassandra (events)
-                                      |                         +--> RabbitMQ queues (x4)
+                                      |             |           +--> Cassandra (events)
+                                      |             |           +--> RabbitMQ queues (x4)
+                                      |             |                        |
+Producer --> Kafka: pageviews (4p) ---+             |                        v
+                                      |             |           Workers (x4) --> Redis (job status)
+                                      |             |
+                                      |             +--> Redis pub/sub: events:pageviews
                                       |                                      |
-Producer --> Kafka: pageviews (4p) ---+                                      v
-                                      |                         Workers (x4) --> Redis (job status)
-                                      |
-                                      +--> PyFlink pageview-stats job
-                                                   |
-                                                   v
-                                          Kafka: pageview_stats
-                                                   |
-                                                   v
-                                          flink-stats-consumer
-                                                   |
-                                                   v
-                                          Redis (flink:* stats)
-
-FastAPI reads Redis and Cassandra:
-  - original counters, last-page, events, and job status
-  - Flink-derived window counts from Redis
+                                      +--> PyFlink pageview-stats job        |
+                                                   |                         |
+                                                   v                         |
+                                          Kafka: pageview_stats              |
+                                                   |                         |
+                                                   v                         |
+                                          flink-stats-consumer               |
+                                                   |                         |
+                                                   +--> Redis (flink:* stats)
+                                                   +--> Redis pub/sub: events:flink:windows
+                                                                             |
+FastAPI reads Redis and Cassandra and subscribes to Redis pub/sub -----------+
+   |THat 
+   +--> HTTP JSON endpoints
+   +--> WebSockets: /ws/pageviews, /ws/flink/windows
+   +--> Browser viewer: /realtime
 
 Flink dashboard: http://localhost:8081
 FastAPI:         http://localhost:8000
@@ -62,6 +66,19 @@ window per page into Redis under `flink:*` keys.
 - `GET /events/{user_id}` — recent pageview events for a user
 - `GET /flink/counts/page/{page}` — latest Flink-derived page count
 - `GET /flink/windows/latest` — latest Flink window mirrored into Redis
+- `GET /realtime` — browser page for watching live WebSocket messages
+- `WS /ws/pageviews` — live pageview notifications from Redis pub/sub
+- `WS /ws/flink/windows` — live Flink window notifications from Redis pub/sub
+
+The WebSocket endpoints are a presentation layer only. The Kafka consumer and
+Flink stats consumer publish small notifications to Redis channels after their
+existing Redis writes:
+
+- `events:pageviews`
+- `events:flink:windows`
+
+FastAPI subscribes to those channels and broadcasts messages to connected
+WebSocket clients. It does not consume Kafka directly.
 
 ### Architecture Legend
 
@@ -75,8 +92,9 @@ window per page into Redis under `flink:*` keys.
 | PyFlink pageview stats job | `src/pipeline/flink_pageview_stats.py` | Reads `pageviews`, computes event-time tumbling page counts, and writes `pageview_stats`. |
 | Kafka topic `pageview_stats` | `src/pipeline/flink_pageview_stats.py` | Derived Flink output stream used for inspection and API visibility. |
 | Flink Redis bridge | `src/pipeline/flink_stats_consumer.py` | Copies latest Flink window counts from `pageview_stats` into Redis `flink:*` keys. |
-| FastAPI | `src/pipeline/api.py` | Serves Redis/Cassandra data and Flink-derived Redis snapshots over HTTP. |
-| Flink smoke test | `src/pipeline/flink_smoke_test.py` | Sends deterministic events through all 4 Kafka partitions and verifies Flink output, optionally Redis and FastAPI. |
+| Realtime event helpers | `src/pipeline/realtime_events.py` | Defines Redis pub/sub channel names and WebSocket payload shapes. |
+| FastAPI | `src/pipeline/api.py` | Serves Redis/Cassandra data over HTTP, Redis pub/sub messages over WebSockets, and the `/realtime` browser viewer. |
+| Flink smoke test | `src/pipeline/flink_smoke_test.py` | Sends deterministic events through all 4 Kafka partitions and verifies Flink output, optionally Redis, FastAPI, and WebSockets. |
 | Flink image | `flink.Dockerfile` | Extends the official Flink image with Python runtime packages and the SQL Kafka connector JAR. |
 | Local orchestration | `docker-compose.yml`, `Procfile` | Starts infrastructure containers and host Python processes for local development. |
 
@@ -135,9 +153,12 @@ Use [honcho](https://honcho.readthedocs.io/) to run all processes at once via th
 uv run honcho start
 ```
 
-This starts the producer, 4 consumers, 4 workers, and API server simultaneously. Each process is labelled in the log output.
-The Flink stats consumer is also started; it waits for the optional Flink output
-topic and mirrors the latest Flink-derived counts into Redis.
+This starts the producer, 4 consumers, 4 workers, the Flink job submitter,
+the Flink stats consumer, and API server simultaneously. Each process is
+labelled in the log output. The Flink job submitter periodically checks the
+Flink session cluster and submits the pageview stats job if it is not already
+running. The Flink stats consumer waits for the Flink output topic and mirrors
+the latest Flink-derived counts into Redis.
 
 To run individual components instead:
 
@@ -156,10 +177,23 @@ RABBITMQ_QUEUE=analytics_jobs_1 uv run worker
 RABBITMQ_QUEUE=analytics_jobs_2 uv run worker
 RABBITMQ_QUEUE=analytics_jobs_3 uv run worker
 
+uv run flink-job-submitter
+uv run flink-stats-consumer
 uv run api
 ```
 
 Each consumer instance joins the same Kafka consumer group (`pipeline-consumer`), so Kafka automatically assigns one partition to each. Each worker instance reads from a dedicated RabbitMQ queue, matching the same username partitioning scheme used by Kafka.
+
+To inspect live WebSocket messages, open this page while the API and consumer
+are running:
+
+```text
+http://localhost:8000/realtime
+```
+
+The page connects to `ws://localhost:8000/ws/pageviews` and
+`ws://localhost:8000/ws/flink/windows`. The Flink stream shows messages after
+the Flink job and `flink-stats-consumer` are running.
 
 ## Configuration
 
@@ -172,6 +206,10 @@ All settings default to `localhost` for local development. Override via environm
 | `KAFKA_STATS_TOPIC`  | `pageview_stats`     | Flink stats Kafka topic   |
 | `KAFKA_PARTITIONS`   | `4`                  | Number of Kafka partitions|
 | `FLINK_WINDOW_SECONDS`| `10`                | Flink stats window length |
+| `FLINK_JOB_SUBMIT_INTERVAL_SECONDS`| `30`  | Seconds between Flink job checks |
+| `FLINK_PAGEVIEW_STATS_JOB_NAME`| `pageview-stats`| Running Flink job name to look for |
+| `FLINK_PAGEVIEW_STATS_JOB_PATH`| `/opt/pipeline/src/pipeline/flink_pageview_stats.py`| Job path inside the Flink container |
+| `FLINK_JOBMANAGER_SERVICE`| `flink-jobmanager`| Docker Compose service used for Flink CLI commands |
 | `REDIS_HOST`         | `localhost`          | Redis host                |
 | `REDIS_PORT`         | `6379`               | Redis port                |
 | `RABBITMQ_HOST`      | `localhost`          | RabbitMQ host             |
@@ -233,7 +271,15 @@ Optional multi-TaskManager run:
 docker compose up -d --scale flink-taskmanager=2
 ```
 
-Submit the Flink job to the session cluster:
+The default `honcho start` process includes `flink-job-submitter`, which checks
+the session cluster every 30 seconds and submits the pageview stats job when it
+is missing. To run the submitter by itself:
+
+```bash
+uv run flink-job-submitter
+```
+
+To submit the Flink job manually instead:
 
 ```bash
 docker compose exec flink-jobmanager \
@@ -258,7 +304,8 @@ serve them:
 uv run flink-stats-consumer
 ```
 
-The default `honcho start` process already includes `flink-stats-consumer`.
+The default `honcho start` process already includes `flink-job-submitter` and
+`flink-stats-consumer`.
 
 ## Querying the API
 
@@ -350,11 +397,17 @@ Check jobs through the Flink CLI:
 docker compose exec flink-jobmanager flink list
 ```
 
-Submit the pageview stats job:
+Submit the pageview stats job manually:
 
 ```bash
 docker compose exec flink-jobmanager \
   flink run -d -py /opt/pipeline/src/pipeline/flink_pageview_stats.py
+```
+
+Or let the local submitter process keep it running:
+
+```bash
+uv run flink-job-submitter
 ```
 
 Run the automated smoke test:
@@ -379,6 +432,21 @@ uv run api
 # terminal 3
 uv run flink-smoke-test --check-redis --api-url http://localhost:8000
 ```
+
+To include WebSocket delivery, run the normal `honcho` stack so the API,
+Kafka consumers, Flink submitter, and Flink stats consumer are all active, then
+run:
+
+```bash
+uv run flink-smoke-test \
+  --check-redis \
+  --api-url http://localhost:8000 \
+  --check-websocket
+```
+
+The WebSocket check connects to `/ws/pageviews` and `/ws/flink/windows` before
+sending smoke events, then waits for messages containing the unique smoke-test
+pages.
 
 Send deterministic test events across all 4 Kafka partitions. This sends 40
 `/pricing` events, then 4 later events to advance the event-time watermark so
@@ -506,8 +574,6 @@ The remaining work is about making it more operational and more useful:
    top-pages-per-window, so Flink is doing more than a page-count demo.
 6. Extend `flink-smoke-test` so it can optionally start and stop the bridge/API
    helper processes itself.
-7. Add a small submit helper, Make target, or Compose one-shot service so job
-   submission is less manual.
 
 ## Inspecting Kafka
 

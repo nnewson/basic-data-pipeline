@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from pipeline.kafka_consumer import get_queue_name, process_messages, update_cassandra, update_redis
+from pipeline.realtime_events import PAGEVIEWS_CHANNEL
 
 
 @pytest.fixture
@@ -49,6 +50,22 @@ def test_update_redis_increments_before_setting(sample_event):
     update_redis(redis_client, sample_event)
 
     assert call_order == ["incr", "set"]
+
+
+def test_update_redis_publishes_pageview_event(sample_event):
+    redis_client = MagicMock()
+
+    update_redis(redis_client, sample_event)
+
+    channel, payload = redis_client.publish.call_args.args
+    assert channel == PAGEVIEWS_CHANNEL
+    assert json.loads(payload) == {
+        "type": "pageview",
+        "event_id": "abc-123",
+        "user_id": "jane_doe",
+        "page": "/pricing",
+        "timestamp": 1700000000.0,
+    }
 
 
 # --- update_cassandra ---

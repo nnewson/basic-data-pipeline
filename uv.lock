@@ -147,6 +147,7 @@ dependencies = [
     { name = "pika" },
     { name = "redis" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -171,6 +172,7 @@ requires-dist = [
     { name = "redis" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"] },
+    { name = "websockets" },
 ]
 provides-extras = ["dev"]
 

@@ -8,6 +8,7 @@ from kafka import KafkaConsumer
 
 from pipeline import wait_for_connection
 from pipeline.config import KAFKA_SERVER, KAFKA_STATS_TOPIC, REDIS_HOST, REDIS_PORT
+from pipeline.realtime_events import FLINK_WINDOWS_CHANNEL, event_json, flink_window_event
 
 logger = logging.getLogger("flink-stats-consumer")
 
@@ -56,6 +57,7 @@ def update_redis(redis_client: redis.Redis, stats: FlinkPageViewStats) -> None:
     redis_client.set(page_window_start_key(stats.page), stats.window_start)
     redis_client.set(page_window_end_key(stats.page), stats.window_end)
     redis_client.set(LATEST_WINDOW_KEY, json.dumps(payload))
+    redis_client.publish(FLINK_WINDOWS_CHANNEL, event_json(flink_window_event(stats)))
 
 
 def process_messages(consumer: KafkaConsumer, redis_client: redis.Redis) -> None:

@@ -18,6 +18,7 @@ from pipeline.config import (
     REDIS_HOST,
     REDIS_PORT,
 )
+from pipeline.realtime_events import PAGEVIEWS_CHANNEL, event_json, pageview_event
 
 logger = logging.getLogger("consumer")
 
@@ -27,6 +28,7 @@ def update_redis(redis_client: redis.Redis, event: dict) -> None:
     user = event["user_id"]
     redis_client.incr(f"pageviews:{page}")
     redis_client.set(f"user:last_page:{user}", page)
+    redis_client.publish(PAGEVIEWS_CHANNEL, event_json(pageview_event(event)))
 
 
 def update_cassandra(session, event: dict) -> None:

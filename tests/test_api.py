@@ -1,3 +1,4 @@
+import asyncio
 from collections import namedtuple
 from datetime import datetime
 from unittest.mock import MagicMock
@@ -6,7 +7,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
-from pipeline.api import app, get_redis, get_session
+from pipeline.api import WebSocketConnectionManager, app, get_redis, get_session
 from pipeline.flink_stats_consumer import (
     LATEST_WINDOW_KEY,
     page_count_key,
@@ -48,6 +49,15 @@ def test_health_returns_ok(client):
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_realtime_returns_websocket_test_page(client):
+    response = client.get("/realtime")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "/ws/pageviews" in response.text
+    assert "/ws/flink/windows" in response.text
 
 
 @pytest.mark.parametrize(
@@ -224,3 +234,54 @@ def test_flink_latest_window_returns_null_when_empty(client, mock_redis):
 
     assert response.status_code == 200
     assert response.json() is None
+
+
+# --- WebSockets ---
+
+
+class FakeWebSocket:
+    def __init__(self):
+        self.accepted = False
+        self.messages = []
+
+    async def accept(self):
+        self.accepted = True
+
+    async def send_text(self, message):
+        self.messages.append(message)
+
+
+class FailingWebSocket(FakeWebSocket):
+    async def send_text(self, message):
+        raise RuntimeError("send failed")
+
+
+def test_websocket_connection_manager_broadcasts_by_channel():
+    async def run():
+        manager = WebSocketConnectionManager()
+        pageviews = FakeWebSocket()
+        flink_windows = FakeWebSocket()
+
+        await manager.connect("events:pageviews", pageviews)
+        await manager.connect("events:flink:windows", flink_windows)
+        await manager.broadcast("events:pageviews", '{"type": "pageview"}')
+
+        assert pageviews.accepted is True
+        assert flink_windows.accepted is True
+        assert pageviews.messages == ['{"type": "pageview"}']
+        assert flink_windows.messages == []
+
+    asyncio.run(run())
+
+
+def test_websocket_connection_manager_drops_failed_connections():
+    async def run():
+        manager = WebSocketConnectionManager()
+        websocket = FailingWebSocket()
+
+        await manager.connect("events:pageviews", websocket)
+        await manager.broadcast("events:pageviews", '{"type": "pageview"}')
+
+        assert "events:pageviews" not in manager.active_connections
+
+    asyncio.run(run())

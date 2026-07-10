@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import json
 import logging
 import time
@@ -6,9 +7,11 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import URLError
+from urllib.parse import urlparse, urlunparse
 from urllib.request import urlopen
 
 import redis
+import websockets
 from kafka import KafkaConsumer, KafkaProducer
 
 from pipeline import get_partition
@@ -191,12 +194,158 @@ def wait_for_api_results(
         wait_for_api_result(api_url, page, expected_count, timeout_seconds)
 
 
+def websocket_url(api_url: str, path: str) -> str:
+    parsed = urlparse(api_url)
+    scheme = "wss" if parsed.scheme == "https" else "ws"
+    return urlunparse((scheme, parsed.netloc, path, "", "", ""))
+
+
+def websocket_result_from_message(
+    message: dict[str, Any], expected_type: str, expected_count: int
+) -> str | None:
+    if message.get("type") != expected_type:
+        return None
+    page = message.get("page")
+    if not isinstance(page, str):
+        return None
+    if expected_type == "flink_window" and int(message.get("count", 0)) < expected_count:
+        return None
+    return page
+
+
+async def wait_for_websocket_results(
+    ws_url: str,
+    pages: set[str],
+    expected_type: str,
+    expected_count: int,
+    timeout_seconds: int,
+    ready: asyncio.Event,
+) -> set[str]:
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+    seen_pages: set[str] = set()
+
+    async with websockets.connect(ws_url) as websocket:
+        ready.set()
+        while asyncio.get_running_loop().time() < deadline:
+            remaining = deadline - asyncio.get_running_loop().time()
+            raw_message = await asyncio.wait_for(websocket.recv(), timeout=remaining)
+            try:
+                message = json.loads(raw_message)
+            except json.JSONDecodeError:
+                continue
+
+            page = websocket_result_from_message(
+                message, expected_type, expected_count
+            )
+            if page in pages:
+                seen_pages.add(page)
+                if seen_pages == pages:
+                    return seen_pages
+
+    return seen_pages
+
+
+async def run_websocket_checked_smoke(
+    api_url: str,
+    producer: KafkaProducer,
+    consumer: KafkaConsumer,
+    user_pages: dict[str, str],
+    pages: set[str],
+    events_per_partition: int,
+    timeout_seconds: int,
+    check_redis: bool,
+) -> None:
+    pageview_ready = asyncio.Event()
+    flink_ready = asyncio.Event()
+    pageview_task = asyncio.create_task(
+        wait_for_websocket_results(
+            websocket_url(api_url, "/ws/pageviews"),
+            pages,
+            "pageview",
+            1,
+            timeout_seconds,
+            pageview_ready,
+        )
+    )
+    flink_task = asyncio.create_task(
+        wait_for_websocket_results(
+            websocket_url(api_url, "/ws/flink/windows"),
+            pages,
+            "flink_window",
+            events_per_partition,
+            timeout_seconds,
+            flink_ready,
+        )
+    )
+
+    await asyncio.wait_for(pageview_ready.wait(), timeout=timeout_seconds)
+    await asyncio.wait_for(flink_ready.wait(), timeout=timeout_seconds)
+    send_test_events(producer, user_pages, events_per_partition)
+    print(
+        f"Sent {events_per_partition} events to each of "
+        f"{KAFKA_PARTITIONS} Kafka partitions."
+    )
+
+    results = await asyncio.to_thread(
+        wait_for_flink_results, consumer, pages, events_per_partition, timeout_seconds
+    )
+    print_flink_results(results)
+
+    if check_redis:
+        await asyncio.to_thread(
+            wait_for_redis_results, pages, events_per_partition, timeout_seconds
+        )
+        print("Redis bridge output ok.")
+
+    await asyncio.to_thread(
+        wait_for_api_results, api_url, pages, events_per_partition, timeout_seconds
+    )
+    print(f"FastAPI output ok: {api_url}")
+
+    try:
+        pageview_pages, flink_pages = await asyncio.gather(pageview_task, flink_task)
+    finally:
+        pageview_task.cancel()
+        flink_task.cancel()
+
+    if pageview_pages != pages:
+        raise TimeoutError(
+            f"Timed out waiting for pageview WebSocket pages "
+            f"{sorted(pages - pageview_pages)}."
+        )
+    if flink_pages != pages:
+        raise TimeoutError(
+            f"Timed out waiting for Flink WebSocket pages {sorted(pages - flink_pages)}."
+        )
+
+    print("WebSocket output ok:")
+    print(f"  {websocket_url(api_url, '/ws/pageviews')}")
+    print(f"  {websocket_url(api_url, '/ws/flink/windows')}")
+
+
+def print_flink_results(results: dict[str, SmokeResult]) -> None:
+    print("Flink output ok:")
+    for result in sorted(results.values(), key=lambda item: item.page):
+        print(
+            f"  {result.page} count={result.count} "
+            f"window={result.window_start}..{result.window_end}"
+        )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Smoke test the Flink sidecar path.")
     parser.add_argument("--count", type=int, default=40)
     parser.add_argument("--timeout", type=int, default=60)
     parser.add_argument("--check-redis", action="store_true")
     parser.add_argument("--api-url", default=None)
+    parser.add_argument(
+        "--check-websocket",
+        action="store_true",
+        help=(
+            "Verify /ws/pageviews and /ws/flink/windows. Requires --api-url and "
+            "the API, kafka consumers, and flink-stats-consumer to be running."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -208,6 +357,8 @@ def main() -> None:
         raise SystemExit(
             f"Expected KAFKA_PARTITIONS=4 for this smoke test, got {KAFKA_PARTITIONS}."
         )
+    if args.check_websocket and not args.api_url:
+        raise SystemExit("--check-websocket requires --api-url.")
 
     user_pages = make_partition_pages()
     pages = set(user_pages.values())
@@ -220,6 +371,21 @@ def main() -> None:
     producer = make_producer()
     consumer = make_stats_consumer(args.timeout * 1000)
     try:
+        if args.check_websocket:
+            asyncio.run(
+                run_websocket_checked_smoke(
+                    args.api_url,
+                    producer,
+                    consumer,
+                    user_pages,
+                    pages,
+                    events_per_partition,
+                    args.timeout,
+                    args.check_redis,
+                )
+            )
+            return
+
         send_test_events(producer, user_pages, events_per_partition)
         print(
             f"Sent {events_per_partition} events to each of "
@@ -229,12 +395,7 @@ def main() -> None:
         results = wait_for_flink_results(
             consumer, pages, events_per_partition, args.timeout
         )
-        print("Flink output ok:")
-        for result in sorted(results.values(), key=lambda item: item.page):
-            print(
-                f"  {result.page} count={result.count} "
-                f"window={result.window_start}..{result.window_end}"
-            )
+        print_flink_results(results)
 
         if args.check_redis:
             wait_for_redis_results(pages, events_per_partition, args.timeout)
